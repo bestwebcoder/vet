@@ -5,11 +5,11 @@ import { requireRole } from "@/features/auth/session";
 
 export const metadata: Metadata = { title: "Documents · TV Care" };
 
-export default async function PetDocumentsPage({
+export default async function AdminPatientDocumentsPage({
   params,
-}: PageProps<"/client/pets/[petId]/documents">) {
-  await requireRole("client");
+}: PageProps<"/admin/patients/[petId]/documents">) {
+  await requireRole("admin", "super_admin");
   const { petId } = await params;
 
-  return <PetDocuments petId={petId} audience="client" />;
+  return <PetDocuments petId={petId} audience="clinic" />;
 }

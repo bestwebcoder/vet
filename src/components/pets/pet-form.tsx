@@ -25,6 +25,8 @@ type PetFormProps = {
   pet?: PetDetail;
   /** Set by clinic staff creating a patient for a named owner. */
   clientId?: string;
+  /** Owner picker, when the owner is not already decided by the route. */
+  ownerSection?: React.ReactNode;
   submitLabel?: string;
 };
 
@@ -38,6 +40,7 @@ export function PetForm({
   breeds,
   pet,
   clientId,
+  ownerSection,
   submitLabel = "Save pet",
 }: PetFormProps) {
   const [state, formAction] = useActionState(action, idleState);
@@ -65,6 +68,8 @@ export function PetForm({
 
           {pet ? <input type="hidden" name="petId" value={pet.id} /> : null}
           {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
+
+          {ownerSection}
 
           <Field
             label="Name"

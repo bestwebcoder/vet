@@ -53,7 +53,7 @@ export const CLIENT_NAV: NavItem[] = [
 export const DOCTOR_NAV: NavItem[] = [
   { label: "Dashboard", href: "/doctor", icon: LayoutDashboard },
   { label: "Appointments", href: "/doctor/appointments", icon: CalendarDays, phase: 3 },
-  { label: "Patients", href: "/doctor/patients", icon: UserRound, phase: 2 },
+  { label: "Patients", href: "/doctor/patients", icon: PawPrint },
   { label: "Calendar", href: "/doctor/calendar", icon: CalendarDays, phase: 3 },
   { label: "SOAP", href: "/doctor/soap", icon: ClipboardList, phase: 4 },
   { label: "Prescriptions", href: "/doctor/prescriptions", icon: FileText, phase: 5 },
@@ -66,9 +66,11 @@ export const DOCTOR_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { label: "Appointments", href: "/admin/appointments", icon: CalendarDays, phase: 3 },
-  { label: "Clients", href: "/admin/clients", icon: Users, phase: 2 },
-  { label: "Patients", href: "/admin/patients", icon: UserRound, phase: 2 },
-  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, phase: 2 },
+  { label: "Clients", href: "/admin/clients", icon: Users },
+  { label: "Patients", href: "/admin/patients", icon: PawPrint },
+  // Not in any earlier phase's scope: managing doctors appears only in the
+  // admin workflow of CLAUDE.md §12, which Phase 10 must satisfy.
+  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, phase: 10 },
   { label: "Services", href: "/admin/services", icon: ClipboardList, phase: 7 },
   { label: "Billing", href: "/admin/billing", icon: CreditCard, phase: 7 },
   { label: "Payments", href: "/admin/payments", icon: Wallet, phase: 7 },

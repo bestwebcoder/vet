@@ -1,18 +1,12 @@
-import { PawPrint, Pencil } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { PetTabNav } from "@/components/pets/pet-tab-nav";
-import { buttonVariants } from "@/components/ui/button";
+import { PetRecordFrame } from "@/components/pets/pet-record-frame";
 import { requireRole } from "@/features/auth/session";
 import { getPet, signedPhotoUrl } from "@/features/pets/queries";
 
 /**
- * The patient record frame: who this is, and the nine tabs of their history.
- *
- * Loading the patient here means every tab inherits the same access decision,
- * so no tab can accidentally render for someone who may not see the patient.
+ * Loading the patient in the layout means every tab inherits the same access
+ * decision, so no tab can render for someone who may not see the patient.
  */
 export default async function PetLayout({ children, params }: LayoutProps<"/client/pets/[petId]">) {
   await requireRole("client");
@@ -26,41 +20,15 @@ export default async function PetLayout({ children, params }: LayoutProps<"/clie
     notFound();
   }
 
-  const pet = result.data;
-  const photoUrl = await signedPhotoUrl(pet.photoPath);
+  const photoUrl = await signedPhotoUrl(result.data.photoPath);
 
   return (
-    <div className="grid gap-6">
-      <div className="flex flex-wrap items-start gap-4">
-        <span className="bg-secondary text-secondary-foreground relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-          {photoUrl ? (
-            <Image src={photoUrl} alt="" fill sizes="64px" className="object-cover" />
-          ) : (
-            <PawPrint className="size-7" aria-hidden />
-          )}
-        </span>
-
-        <div className="grid flex-1 gap-1">
-          <h1>{pet.name}</h1>
-          <p className="text-muted-foreground">
-            {[pet.speciesName, pet.breedName].filter(Boolean).join(" · ") ||
-              "Species not recorded"}{" "}
-            • {pet.age}
-          </p>
-        </div>
-
-        <Link
-          href={`/client/pets/${pet.id}/edit`}
-          className={buttonVariants({ variant: "outline", size: "touch" })}
-        >
-          <Pencil aria-hidden />
-          Edit
-        </Link>
-      </div>
-
-      <PetTabNav basePath={`/client/pets/${pet.id}`} />
-
+    <PetRecordFrame
+      pet={result.data}
+      photoUrl={photoUrl}
+      basePath={`/client/pets/${result.data.id}`}
+    >
       {children}
-    </div>
+    </PetRecordFrame>
   );
 }

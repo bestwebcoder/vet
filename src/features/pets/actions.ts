@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/features/auth/session";
 import { failure, invalid, text, triState, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
+import { clientSchema } from "@/lib/validation/client";
 import { petSchema, petToRow } from "@/lib/validation/pet";
 import { describePhotoProblem, readPhoto, uploadPetPhoto } from "@/features/pets/photo";
 
@@ -61,6 +62,61 @@ async function resolveOwner(formData: FormData): Promise<
 
   const user = await getSessionUser();
   if (!user) return { ok: false, message: "Please sign in again." };
+
+  // Clinic staff meeting a new client and their animal at the same visit can
+  // record both in one step rather than being sent away to create the owner.
+  const newOwnerName = text(formData, "newClientFullName");
+  const newOwnerPhone = text(formData, "newClientPhone");
+
+  if (newOwnerName || newOwnerPhone) {
+    const isClinicStaff = user.roles.some(
+      (role) => role === "doctor" || role === "admin" || role === "super_admin",
+    );
+
+    if (!isClinicStaff) {
+      return { ok: false, message: "You cannot create a client record." };
+    }
+
+    const parsedOwner = clientSchema
+      .pick({ fullName: true, phone: true })
+      .safeParse({ fullName: newOwnerName ?? "", phone: newOwnerPhone ?? "" });
+
+    if (!parsedOwner.success) {
+      return {
+        ok: false,
+        message: "Enter the new client's name and a valid mobile number.",
+      };
+    }
+
+    const organizationId = text(formData, "organizationId") ?? user.organizationIds[0];
+    if (!organizationId) {
+      return { ok: false, message: "We could not tell which practice to add this client to." };
+    }
+
+    const { data: created, error: createError } = await supabase
+      .from("clients")
+      .insert({
+        full_name: parsedOwner.data.fullName,
+        phone: parsedOwner.data.phone,
+        organization_id: organizationId,
+      })
+      .select("id, organization_id")
+      .single();
+
+    if (createError) {
+      console.error("[pets] creating owner failed", createError);
+
+      return {
+        ok: false,
+        message:
+          createError.code === "23505"
+            ? "A client with that mobile number already exists. Choose them from the list instead."
+            : "We could not create that client. Please try again.",
+      };
+    }
+
+    return { ok: true, clientId: created.id, organizationId: created.organization_id };
+  }
 
   const { data, error } = await supabase
     .from("clients")

@@ -4,19 +4,14 @@ import { PetTabPlaceholder } from "@/components/pets/pet-tab-placeholder";
 import { findPetTab } from "@/components/pets/pet-tabs";
 import { requireRole } from "@/features/auth/session";
 
-export default async function PetTabPlaceholderPage({
+export default async function AdminPatientTabPage({
   params,
-}: PageProps<"/client/pets/[petId]/[...tab]">) {
-  await requireRole("client");
+}: PageProps<"/admin/patients/[petId]/[...tab]">) {
+  await requireRole("admin", "super_admin");
   const { tab } = await params;
 
   const definition = tab.length === 1 ? findPetTab(tab[0]) : undefined;
-
-  // A tab that is part of the record but unbuilt explains itself; anything
-  // that is not a tab at all is a genuine 404.
-  if (!definition || !definition.phase) {
-    notFound();
-  }
+  if (!definition || !definition.phase) notFound();
 
   return <PetTabPlaceholder tab={definition} />;
 }

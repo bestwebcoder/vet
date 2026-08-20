@@ -95,17 +95,52 @@ function toDetail(row: any): PetDetail {
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 /** Patients the caller may see, newest first. Optionally for one owner. */
-export async function listPets(options: { clientId?: string } = {}): Promise<Result<PetDetail[]>> {
+export async function listPets(
+  options: { clientId?: string; search?: string; limit?: number } = {},
+): Promise<Result<PetDetail[]>> {
   const supabase = await createClient();
 
   let query = supabase
     .from("pets")
     .select(PET_COLUMNS)
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(options.limit ?? 100);
 
   if (options.clientId) {
     query = query.eq("client_id", options.clientId);
+  }
+
+  const search = options.search?.trim();
+
+  if (search) {
+    // Clinic staff look a patient up by the owner as often as by the animal,
+    // so owners are resolved first and their patients included.
+    const escaped = search.replace(/[%,()]/g, " ");
+    const digits = search.replace(/[\s()-]/g, "");
+    const normalised = digits.replace(/^(?:\+?880|0)/, "+880");
+
+    const { data: owners } = await supabase
+      .from("clients")
+      .select("id")
+      .is("deleted_at", null)
+      .or(
+        [
+          `full_name.ilike.%${escaped}%`,
+          `phone.ilike.%${escaped}%`,
+          ...(/^\+?\d+$/.test(digits) ? [`phone.ilike.%${normalised}%`] : []),
+        ].join(","),
+      );
+
+    const ownerIds = (owners ?? []).map((owner) => owner.id);
+
+    query = query.or(
+      [
+        `name.ilike.%${escaped}%`,
+        `microchip_number.ilike.%${escaped}%`,
+        ...(ownerIds.length ? [`client_id.in.(${ownerIds.join(",")})`] : []),
+      ].join(","),
+    );
   }
 
   const { data, error } = await query;
