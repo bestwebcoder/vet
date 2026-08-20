@@ -62,7 +62,7 @@ export default async function HomePage() {
             </dl>
 
             <form action={logoutAction}>
-              <Button type="submit" variant="outline" className="h-11 w-full">
+              <Button type="submit" variant="outline" size="touch" className="w-full">
                 Sign out
               </Button>
             </form>

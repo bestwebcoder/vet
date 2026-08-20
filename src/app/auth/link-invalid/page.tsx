@@ -17,12 +17,12 @@ export default function LinkInvalidPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">
-          <Link href="/forgot-password" className={buttonVariants({ className: "h-11 w-full" })}>
+          <Link href="/forgot-password" className={buttonVariants({ size: "touch", className: "w-full" })}>
             Send me a new link
           </Link>
           <Link
             href="/login"
-            className={buttonVariants({ variant: "outline", className: "h-11 w-full" })}
+            className={buttonVariants({ variant: "outline", size: "touch", className: "w-full" })}
           >
             Back to sign in
           </Link>
