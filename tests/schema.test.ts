@@ -1,3 +1,7 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 
@@ -89,10 +93,19 @@ describe("seeded reference data", () => {
     expect(branches?.[0]).toMatchObject({ name: "Main", is_primary: true });
   });
 
-  it("holds no seeded people — every user, doctor and client is real data", async () => {
-    for (const table of ["users", "doctors", "staff", "clients"] as const) {
-      const { count } = await admin.from(table).select("*", { count: "exact", head: true });
-      expect(count, `${table} should be empty`).toBe(0);
+  // Asserted against the migration source rather than table counts, because
+  // other suites create fixture people in the same database.
+  it("never seeds a person — no hard-coded patients, doctors or staff", () => {
+    const dir = fileURLToPath(new URL("../supabase/migrations", import.meta.url));
+
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql"))) {
+      const sql = readFileSync(join(dir, file), "utf8").toLowerCase();
+
+      for (const table of ["users", "doctors", "staff", "clients"]) {
+        expect(sql, `${file} must not seed ${table}`).not.toMatch(
+          new RegExp(`insert\\s+into\\s+(public\\.)?${table}\\b`),
+        );
+      }
     }
   });
 });
