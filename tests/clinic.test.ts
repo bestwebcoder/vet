@@ -270,3 +270,56 @@ describe("the patient record is the same record everywhere", () => {
     expect(html).toContain("Vaccinations is not available yet");
   });
 });
+
+describe("clinic staff manage patients, as §2.3 requires", () => {
+  it("lets a doctor create a patient for an existing client", async () => {
+    const { data: species } = await admin.from("species").select("id").eq("slug", "dog").single();
+
+    const { data, error } = await doctorDb
+      .from("pets")
+      .insert({
+        client_id: clientId,
+        organization_id: orgA,
+        name: `VetAdded${RUN}`,
+        species_id: species!.id,
+      })
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(1);
+  });
+
+  it("lets a doctor edit patient information", async () => {
+    const { data, error } = await doctorDb
+      .from("pets")
+      .update({ notes: "Muzzle required for nail trims." })
+      .eq("id", petId)
+      .select("notes");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([{ notes: "Muzzle required for nail trims." }]);
+  });
+
+  it("records those changes in the audit trail", async () => {
+    const { data } = await admin
+      .from("audit_logs")
+      .select("action")
+      .eq("entity_id", petId)
+      .eq("action", "pets.update");
+
+    expect(data!.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("stops a doctor creating a patient in another practice", async () => {
+    const { data: species } = await admin.from("species").select("id").eq("slug", "dog").single();
+
+    const { error } = await doctorDb.from("pets").insert({
+      client_id: clientId,
+      organization_id: orgB,
+      name: `WrongPractice${RUN}`,
+      species_id: species!.id,
+    });
+
+    expect(error).not.toBeNull();
+  });
+});
