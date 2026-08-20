@@ -1,6 +1,6 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-import type { FormState } from "@/features/auth/actions";
+import type { FormState } from "@/lib/forms";
 
 /**
  * Renders the form-level outcome. Server actions never return technical

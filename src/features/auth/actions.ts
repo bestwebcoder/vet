@@ -2,9 +2,9 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import type { ZodError } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import { failure, invalid, type FormState } from "@/lib/forms";
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -12,29 +12,9 @@ import {
   resetPasswordSchema,
 } from "@/lib/validation/auth";
 
-/**
- * Every action returns this shape. Technical detail is logged, never returned:
- * the user sees a sentence, the server keeps the cause.
- */
-export type FormState =
-  | { status: "idle" }
-  | { status: "success"; message?: string }
-  | { status: "error"; message: string; fieldErrors?: Record<string, string[]> };
-
-function fieldErrorsFrom(error: ZodError): Record<string, string[]> {
-  const fieldErrors: Record<string, string[]> = {};
-
-  for (const issue of error.issues) {
-    const key = issue.path.join(".") || "form";
-    (fieldErrors[key] ??= []).push(issue.message);
-  }
-
-  return fieldErrors;
-}
-
-function logFailure(context: string, cause: unknown) {
-  console.error(`[auth] ${context}`, cause);
-}
+// Re-exported so screens can keep importing the form state alongside the
+// actions they use it with.
+export type { FormState };
 
 async function siteOrigin(): Promise<string> {
   const headerList = await headers();
@@ -57,11 +37,7 @@ export async function registerAction(
   });
 
   if (!parsed.success) {
-    return {
-      status: "error",
-      message: "Please correct the highlighted fields.",
-      fieldErrors: fieldErrorsFrom(parsed.error),
-    };
+    return invalid(parsed.error);
   }
 
   const { fullName, email, phone, password } = parsed.data;
@@ -79,7 +55,7 @@ export async function registerAction(
   });
 
   if (error) {
-    logFailure("registration failed", error);
+    console.error("[auth] registration failed", error);
 
     // 23505 is the unique index on (organization_id, phone) raised by the
     // signup trigger, surfaced through the auth API as a database error.
@@ -116,18 +92,14 @@ export async function loginAction(_previous: FormState, formData: FormData): Pro
   });
 
   if (!parsed.success) {
-    return {
-      status: "error",
-      message: "Please correct the highlighted fields.",
-      fieldErrors: fieldErrorsFrom(parsed.error),
-    };
+    return invalid(parsed.error);
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
-    logFailure("sign in failed", error);
+    console.error("[auth] sign in failed", error);
 
     if (error.code === "email_not_confirmed") {
       return {
@@ -149,7 +121,7 @@ export async function logoutAction() {
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    logFailure("sign out failed", error);
+    console.error("[auth] sign out failed", error);
   }
 
   redirect("/login");
@@ -162,11 +134,7 @@ export async function requestPasswordResetAction(
   const parsed = forgotPasswordSchema.safeParse({ email: formData.get("email") });
 
   if (!parsed.success) {
-    return {
-      status: "error",
-      message: "Please correct the highlighted fields.",
-      fieldErrors: fieldErrorsFrom(parsed.error),
-    };
+    return invalid(parsed.error);
   }
 
   const supabase = await createClient();
@@ -175,7 +143,7 @@ export async function requestPasswordResetAction(
   });
 
   if (error) {
-    logFailure("password reset request failed", error);
+    console.error("[auth] password reset request failed", error);
   }
 
   // Always the same answer, whether or not that address has an account.
@@ -195,11 +163,7 @@ export async function resetPasswordAction(
   });
 
   if (!parsed.success) {
-    return {
-      status: "error",
-      message: "Please correct the highlighted fields.",
-      fieldErrors: fieldErrorsFrom(parsed.error),
-    };
+    return invalid(parsed.error);
   }
 
   const supabase = await createClient();
@@ -215,12 +179,11 @@ export async function resetPasswordAction(
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
 
   if (error) {
-    logFailure("password update failed", error);
-
-    return {
-      status: "error",
-      message: "We could not update your password. Request a new reset link and try again.",
-    };
+    return failure(
+      "auth",
+      error,
+      "We could not update your password. Request a new reset link and try again.",
+    );
   }
 
   redirect("/");

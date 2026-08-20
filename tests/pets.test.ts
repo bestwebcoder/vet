@@ -22,7 +22,6 @@ const RUN = runId();
 let orgA: string;
 let orgB: string;
 let clientA: SupabaseClient;
-let clientB: SupabaseClient;
 let doctorA: SupabaseClient;
 let adminA: SupabaseClient;
 let doctorB: SupabaseClient;
@@ -131,9 +130,8 @@ beforeAll(async () => {
     species_id: dogSpecies,
   });
 
-  [clientA, clientB, doctorA, adminA, doctorB] = await Promise.all([
+  [clientA, doctorA, adminA, doctorB] = await Promise.all([
     signedInClient(userA.email),
-    signedInClient(userB.email),
     signedInClient(vetA.email),
     signedInClient(adminUser.email),
     signedInClient(vetB.email),
