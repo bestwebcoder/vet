@@ -13,7 +13,8 @@
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "db:diff": "supabase db diff"
+    "db:diff": "supabase db diff",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

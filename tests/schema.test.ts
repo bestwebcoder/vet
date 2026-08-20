@@ -84,13 +84,16 @@ describe("seeded reference data", () => {
     expect(org?.name).toBe("The Traveling Vet");
     expect(org?.timezone).toBe("Asia/Dhaka");
 
-    const { data: branches } = await admin
+    // Asserts what the migration seeds, not how many branches exist: a
+    // practice legitimately opens more, and only one of them may be primary.
+    const { data: primary } = await admin
       .from("branches")
       .select("name, is_primary")
-      .eq("organization_id", org!.id);
+      .eq("organization_id", org!.id)
+      .eq("is_primary", true);
 
-    expect(branches).toHaveLength(1);
-    expect(branches?.[0]).toMatchObject({ name: "Main", is_primary: true });
+    expect(primary).toHaveLength(1);
+    expect(primary?.[0]).toMatchObject({ name: "Main", is_primary: true });
   });
 
   // Asserted against the migration source rather than table counts, because

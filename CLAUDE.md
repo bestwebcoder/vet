@@ -62,6 +62,11 @@ Notes that differ from most tutorials and are easy to get wrong:
 Migrations are developed against the **local Supabase stack** (`npm run db:start`,
 `npm run db:reset`) and only pushed to a remote project once a checkpoint passes.
 
+`npm run seed:demo` fills the local database with a small demo practice. It is
+development scaffolding, deliberately outside `supabase/migrations` — migrations
+run everywhere, and inventing people in one would put fictional clients into a
+real clinical system. It refuses to run against any non-local database.
+
 ---
 
 ## 3. Roles
