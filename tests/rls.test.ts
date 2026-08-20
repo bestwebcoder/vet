@@ -43,18 +43,16 @@ async function createActor(
 ): Promise<Actor> {
   const email = `${label}-${RUN}@tvcare.test`;
 
+  // No signup_source, so this is an administratively created account: the
+  // trigger provisions the profile but grants no role of its own.
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
     password: PASSWORD,
     email_confirm: true,
+    user_metadata: { full_name: `${label} ${RUN}` },
   });
   if (createError) throw createError;
   const userId = created.user.id;
-
-  const { error: profileError } = await admin
-    .from("users")
-    .insert({ id: userId, full_name: `${label} ${RUN}`, email });
-  if (profileError) throw profileError;
 
   const { data: role } = await admin.from("roles").select("id").eq("slug", roleSlug).single();
 

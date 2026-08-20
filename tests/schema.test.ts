@@ -99,7 +99,12 @@ describe("seeded reference data", () => {
     const dir = fileURLToPath(new URL("../supabase/migrations", import.meta.url));
 
     for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql"))) {
-      const sql = readFileSync(join(dir, file), "utf8").toLowerCase();
+      // Function bodies are stripped first: a trigger inserting a profile from
+      // new.* is runtime behaviour, not seed data. What must not appear is a
+      // literal person written into a migration.
+      const sql = readFileSync(join(dir, file), "utf8")
+        .toLowerCase()
+        .replace(/\$\$[\s\S]*?\$\$/g, " ");
 
       for (const table of ["users", "doctors", "staff", "clients"]) {
         expect(sql, `${file} must not seed ${table}`).not.toMatch(
