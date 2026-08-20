@@ -17,5 +17,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    // Starts the app once for the whole run; route tests need it serving.
+    globalSetup: ["./tests/setup/test-server.ts"],
+    testTimeout: 20_000,
+    hookTimeout: 120_000,
   },
 });
