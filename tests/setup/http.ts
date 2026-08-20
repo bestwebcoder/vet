@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect } from "vitest";
 
 import { parsePublicEnv, parseServerEnv } from "@/lib/env";
@@ -129,4 +129,22 @@ export async function createUserWithRole(
   }
 
   return { email, userId: created.user.id };
+}
+
+/**
+ * A Supabase client signed in as the given user, subject to row level
+ * security. Use this to test what a person can reach in the database, as
+ * distinct from what they can reach over HTTP.
+ */
+export async function signedInClient(email: string): Promise<SupabaseClient> {
+  const db = createClient(
+    publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+    publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    { auth: { persistSession: false } },
+  );
+
+  const { error } = await db.auth.signInWithPassword({ email, password: PASSWORD });
+  if (error) throw error;
+
+  return db;
 }
