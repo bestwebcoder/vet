@@ -19,6 +19,9 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     // Starts the app once for the whole run; route tests need it serving.
     globalSetup: ["./tests/setup/test-server.ts"],
+    // Every suite shares one database. Running files in sequence keeps counts
+    // asserted by the dashboard tests from moving under them.
+    fileParallelism: false,
     testTimeout: 20_000,
     hookTimeout: 120_000,
   },
