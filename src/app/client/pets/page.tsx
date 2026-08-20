@@ -72,9 +72,7 @@ export default async function ClientPetsPage() {
               key={pet.id}
               pet={pet}
               photoUrl={photos[index] ?? null}
-              // The pet profile arrives in the next checkpoint; until then the
-              // card opens the record for editing rather than a route that 404s.
-              href={`/client/pets/${pet.id}/edit`}
+              href={`/client/pets/${pet.id}`}
             />
           ))}
         </div>

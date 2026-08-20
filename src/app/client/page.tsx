@@ -105,7 +105,7 @@ export default async function ClientDashboardPage() {
                 key={pet.id}
                 pet={pet}
                 photoUrl={photos[index] ?? null}
-                href={`/client/pets/${pet.id}/edit`}
+                href={`/client/pets/${pet.id}`}
               />
             ))}
           </div>
