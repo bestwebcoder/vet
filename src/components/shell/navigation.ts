@@ -6,6 +6,7 @@ import {
   FileText,
   FlaskConical,
   Home,
+  PawPrint,
   LayoutDashboard,
   Users,
   Receipt,
@@ -38,7 +39,7 @@ export type NavItem = {
 
 export const CLIENT_NAV: NavItem[] = [
   { label: "Home", href: "/client", icon: Home },
-  { label: "My Pets", href: "/client/pets", icon: UserRound, phase: 2 },
+  { label: "My Pets", href: "/client/pets", icon: PawPrint },
   { label: "Appointments", href: "/client/appointments", icon: CalendarDays, phase: 3 },
   { label: "Medical Records", href: "/client/records", icon: ClipboardList, phase: 4 },
   { label: "Prescriptions", href: "/client/prescriptions", icon: FileText, phase: 5 },
@@ -46,7 +47,7 @@ export const CLIENT_NAV: NavItem[] = [
   { label: "Deworming", href: "/client/deworming", icon: Worm, phase: 6 },
   { label: "Invoices", href: "/client/invoices", icon: Receipt, phase: 7 },
   { label: "Notifications", href: "/client/notifications", icon: Bell, phase: 9 },
-  { label: "Profile", href: "/client/profile", icon: UserCog, phase: 2 },
+  { label: "Profile", href: "/client/profile", icon: UserCog },
 ];
 
 export const DOCTOR_NAV: NavItem[] = [

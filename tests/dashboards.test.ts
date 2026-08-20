@@ -101,8 +101,10 @@ describe("doctor dashboard", () => {
 });
 
 describe("client dashboard", () => {
-  it("shows the client their own details", async () => {
-    const html = await (await clientSession.page("/client")).text();
+  it("shows the client their own details on their profile", async () => {
+    // Contact details moved to /client/profile in Phase 2; the dashboard now
+    // leads with the pets those details belong to.
+    const html = await (await clientSession.page("/client/profile")).text();
 
     expect(html).toContain(`Dash Client ${RUN}`);
     expect(html).toContain("Chattogram");
@@ -110,7 +112,7 @@ describe("client dashboard", () => {
 
   it("never shows another client's details", async () => {
     const otherName = `Dash Client ${RUN}`;
-    const html = await (await adminSession.page("/client")).text();
+    const html = await (await adminSession.page("/client/profile")).text();
 
     // An admin has no client area at all, so this must not render one.
     expect(html).not.toContain(otherName);

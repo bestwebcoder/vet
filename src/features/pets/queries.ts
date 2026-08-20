@@ -11,12 +11,19 @@ import { formatWeight } from "@/lib/units";
  * so no screen does its own arithmetic.
  */
 
+/**
+ * Breed is embedded by table name rather than by column. breed_id is half of a
+ * composite foreign key onto breeds (id, species_id), which PostgREST does not
+ * expose as a `breed_id` relationship — and that constraint is what stops a
+ * Persian being recorded as a dog, so it stays. This string is sent verbatim
+ * to PostgREST and cannot carry comments of its own.
+ */
 const PET_COLUMNS = `
   id, name, sex, is_neutered, date_of_birth, is_date_of_birth_estimated,
   weight_grams, weight_recorded_at, colour, microchip_number,
   allergies, chronic_conditions, notes, photo_path, client_id, organization_id,
   species:species_id (id, name),
-  breed:breed_id (id, name)
+  breed:breeds (id, name)
 `;
 
 type Related = { id: string; name: string } | { id: string; name: string }[] | null;

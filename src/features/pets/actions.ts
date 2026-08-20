@@ -6,6 +6,7 @@ import { getSessionUser } from "@/features/auth/session";
 import { failure, invalid, text, triState, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { petSchema, petToRow } from "@/lib/validation/pet";
+import { describePhotoProblem, readPhoto, uploadPetPhoto } from "@/features/pets/photo";
 
 /**
  * Patient writes.
@@ -111,10 +112,46 @@ export async function createPetAction(
     return failure("pets", error, "We could not save this pet just now. Please try again.");
   }
 
+  const photoMessage = await attachPhoto(data.id, formData);
+
   revalidatePath("/client");
   revalidatePath("/client/pets");
 
-  return { status: "success", message: `${parsed.data.name} has been added.`, id: data.id };
+  return {
+    status: "success",
+    message: photoMessage
+      ? `${parsed.data.name} has been added, but the photo could not be saved. ${photoMessage}`
+      : `${parsed.data.name} has been added.`,
+    id: data.id,
+  };
+}
+
+/**
+ * Saves a photo if one was chosen. Returns a sentence when it could not be
+ * saved: a rejected image must not discard the record the person just typed.
+ */
+async function attachPhoto(petId: string, formData: FormData): Promise<string | null> {
+  const file = readPhoto(formData);
+  if (!file) return null;
+
+  const problem = describePhotoProblem(file);
+  if (problem) return problem;
+
+  const uploaded = await uploadPetPhoto(petId, file);
+  if (!uploaded.ok) return "Please try uploading it again.";
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pets")
+    .update({ photo_path: uploaded.path })
+    .eq("id", petId);
+
+  if (error) {
+    console.error("[pets] recording photo path failed", error);
+    return "Please try uploading it again.";
+  }
+
+  return null;
 }
 
 export async function updatePetAction(
@@ -167,9 +204,15 @@ export async function updatePetAction(
     return { status: "error", message: "You do not have access to this patient." };
   }
 
+  const photoMessage = await attachPhoto(petId, formData);
+
   revalidatePath("/client");
   revalidatePath("/client/pets");
   revalidatePath(`/client/pets/${petId}`);
 
-  return { status: "success", message: "Changes saved.", id: petId };
+  return {
+    status: "success",
+    message: photoMessage ? `Changes saved, but the photo was not. ${photoMessage}` : "Changes saved.",
+    id: petId,
+  };
 }
