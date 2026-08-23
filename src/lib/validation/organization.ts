@@ -25,6 +25,7 @@ export const organizationSettingsSchema = z.object({
   timezone: timezoneSchema,
   email: emailSchema.nullish().transform((value) => value ?? null),
   phone: phoneSchema.nullish().transform((value) => value ?? null),
+  whatsappNumber: phoneSchema.nullish().transform((value) => value ?? null),
   address: optionalText(300, "Address"),
   city: optionalText(80, "City"),
   country: fullNameSchema.max(80, "Country must be 80 characters or fewer"),

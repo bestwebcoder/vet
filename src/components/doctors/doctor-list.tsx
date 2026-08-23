@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { deactivateDoctorAction, reactivateDoctorAction } from "@/features/doctors/actions";
+import { toggleLeadDoctorAction } from "@/features/doctors/billing-actions";
 import type { DoctorSummary } from "@/features/doctors/queries";
 import { idleState } from "@/lib/forms";
 
@@ -23,6 +24,20 @@ function DeactivateToggle({ doctor }: { doctor: DoctorSummary }) {
       <input type="hidden" name="userId" value={doctor.userId} />
       <Button type="submit" variant="outline" size="sm">
         {doctor.isActive ? "Deactivate" : "Reactivate"}
+      </Button>
+    </form>
+  );
+}
+
+function LeadDoctorToggle({ doctor }: { doctor: DoctorSummary }) {
+  const [, formAction] = useActionState(toggleLeadDoctorAction, idleState);
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="doctorId" value={doctor.id} />
+      <input type="hidden" name="isLeadDoctor" value={String(doctor.isLeadDoctor)} />
+      <Button type="submit" variant="outline" size="sm">
+        {doctor.isLeadDoctor ? "Remove lead doctor" : "Mark as lead doctor"}
       </Button>
     </form>
   );
@@ -80,6 +95,7 @@ export function DoctorList({
               </div>
               <div className="flex flex-wrap gap-2">
                 {!doctor.isActive ? <Badge variant="destructive">Deactivated</Badge> : null}
+                {doctor.isLeadDoctor ? <Badge>Lead doctor</Badge> : null}
                 {!doctor.isAcceptingAppointments ? <Badge variant="outline">Not accepting appointments</Badge> : null}
                 {doctor.canManageBilling ? <Badge variant="secondary">Billing</Badge> : null}
                 {doctor.canViewReports ? <Badge variant="secondary">Reports</Badge> : null}
@@ -94,6 +110,7 @@ export function DoctorList({
 
             <div className="flex flex-wrap gap-2">
               <EditDoctorDialog doctor={doctor} branches={branches} />
+              <LeadDoctorToggle doctor={doctor} />
               <DeactivateToggle doctor={doctor} />
             </div>
           </CardContent>

@@ -22,6 +22,7 @@ export type Organization = {
   timezone: string;
   email: string | null;
   phone: string | null;
+  whatsappNumber: string | null;
   address: string | null;
   city: string | null;
   country: string;
@@ -34,7 +35,7 @@ export type Organization = {
 };
 
 const ORGANIZATION_COLUMNS = `
-  id, name, legal_name, timezone, email, phone, address, city, country, is_active,
+  id, name, legal_name, timezone, email, phone, whatsapp_number, address, city, country, is_active,
   payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path
 `;
 
@@ -47,6 +48,7 @@ function toOrganization(row: any): Organization {
     timezone: row.timezone,
     email: row.email,
     phone: row.phone,
+    whatsappNumber: row.whatsapp_number,
     address: row.address,
     city: row.city,
     country: row.country,
@@ -82,6 +84,7 @@ export type PublicOrganizationInfo = {
   name: string;
   phone: string | null;
   email: string | null;
+  whatsappNumber: string | null;
   address: string | null;
   city: string | null;
   heroImageUrl: string | null;
@@ -100,7 +103,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, phone, email, address, city, hero_image_path")
+    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -119,6 +122,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     name: data.name,
     phone: data.phone,
     email: data.email,
+    whatsappNumber: data.whatsapp_number,
     address: data.address,
     city: data.city,
     heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path) : null,

@@ -15,6 +15,7 @@ import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import type { PublicDoctor } from "@/features/doctors/queries";
 import type { PublicOrganizationInfo } from "@/features/organizations/queries";
 import { cn } from "@/lib/utils";
 
@@ -70,7 +71,13 @@ const STEPS = [
   { step: "3", title: "Get the full picture", description: "SOAP notes, prescriptions and invoices, all in your account afterward." },
 ];
 
-export function FrontPage({ organization }: { organization: PublicOrganizationInfo | null }) {
+export function FrontPage({
+  organization,
+  leadDoctor,
+}: {
+  organization: PublicOrganizationInfo | null;
+  leadDoctor: PublicDoctor | null;
+}) {
   const practiceName = organization?.name ?? "The Traveling Vet";
 
   return (
@@ -139,6 +146,32 @@ export function FrontPage({ organization }: { organization: PublicOrganizationIn
             </div>
           </div>
         </section>
+
+        {/* Meet our lead doctor — only renders once an admin has marked one */}
+        {leadDoctor ? (
+          <section className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6">
+            <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
+              {leadDoctor.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- an admin-uploaded, arbitrary-dimension public image; no build-time optimization to gain here.
+                <img src={leadDoctor.photoUrl} alt="" className="size-28 shrink-0 rounded-full object-cover" />
+              ) : (
+                <span className="bg-secondary text-secondary-foreground flex size-28 shrink-0 items-center justify-center rounded-full">
+                  <Stethoscope className="size-10" aria-hidden />
+                </span>
+              )}
+              <div className="grid gap-2">
+                <p className="text-muted-foreground text-sm font-medium tracking-wide uppercase">Meet our lead doctor</p>
+                <h2 className="text-2xl font-semibold tracking-tight">{leadDoctor.fullName}</h2>
+                {leadDoctor.specialization ? <p className="text-muted-foreground">{leadDoctor.specialization}</p> : null}
+                {leadDoctor.qualifications ? <p className="text-muted-foreground text-sm">{leadDoctor.qualifications}</p> : null}
+                {leadDoctor.bio ? <p className="text-muted-foreground mt-1 text-sm">{leadDoctor.bio}</p> : null}
+                <Link href="/doctors" className="text-sm font-medium underline underline-offset-4">
+                  Meet the rest of our team
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {/* Why TV Care */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">

@@ -35,6 +35,7 @@ export type DoctorSummary = {
   isActive: boolean;
   canManageBilling: boolean;
   canViewReports: boolean;
+  isLeadDoctor: boolean;
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
@@ -42,7 +43,7 @@ export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 const DOCTOR_COLUMNS = `
   id, user_id, organization_id, primary_branch_id, specialization, registration_number,
   qualifications, bio, signature_url, photo_path,
-  is_accepting_appointments, deleted_at, can_manage_billing, can_view_reports,
+  is_accepting_appointments, deleted_at, can_manage_billing, can_view_reports, is_lead_doctor,
   user:user_id (full_name, email, phone)
 `;
 
@@ -73,6 +74,7 @@ function toSummary(row: any): DoctorSummary {
     isActive: row.deleted_at === null,
     canManageBilling: row.can_manage_billing,
     canViewReports: row.can_view_reports,
+    isLeadDoctor: row.is_lead_doctor,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -168,6 +170,7 @@ export type PublicDoctor = {
   qualifications: string | null;
   bio: string | null;
   photoUrl: string | null;
+  isLeadDoctor: boolean;
 };
 
 /**
@@ -183,7 +186,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
 
   const { data, error } = await supabase
     .from("doctors")
-    .select("id, specialization, qualifications, bio, photo_path, user:user_id (full_name)")
+    .select("id, specialization, qualifications, bio, photo_path, is_lead_doctor, user:user_id (full_name)")
     .is("deleted_at", null)
     .order("id");
 
@@ -203,7 +206,15 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
         qualifications: row.qualifications,
         bio: row.bio,
         photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path) : null,
+        isLeadDoctor: row.is_lead_doctor,
       };
     }),
   };
+}
+
+/** The featured "Meet our lead doctor" section on the Home/About page — at most one, enforced by a partial unique index. */
+export async function getPublicLeadDoctor(): Promise<PublicDoctor | null> {
+  const result = await getPublicDoctors();
+  if (result.status === "error") return null;
+  return result.data.find((doctor) => doctor.isLeadDoctor) ?? null;
 }

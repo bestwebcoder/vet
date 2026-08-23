@@ -43,6 +43,15 @@ export function SettingsForm({ organization }: { organization: Organization }) {
 
           <Field label="Email" name="email" type="email" inputMode="email" defaultValue={organization.email ?? ""} errors={fieldErrors?.email} />
           <Field label="Phone" name="phone" type="tel" inputMode="tel" defaultValue={organization.phone ?? ""} errors={fieldErrors?.phone} />
+          <Field
+            label="WhatsApp number"
+            name="whatsappNumber"
+            type="tel"
+            inputMode="tel"
+            defaultValue={organization.whatsappNumber ?? ""}
+            hint="Powers the WhatsApp button on the public site. Leave blank to hide it."
+            errors={fieldErrors?.whatsappNumber}
+          />
           <Field label="Address" name="address" defaultValue={organization.address ?? ""} errors={fieldErrors?.address} />
           <Field label="City" name="city" defaultValue={organization.city ?? ""} errors={fieldErrors?.city} />
           <Field label="Country" name="country" defaultValue={organization.country} required errors={fieldErrors?.country} />

@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
+import { getPublicLeadDoctor } from "@/features/doctors/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 
@@ -20,8 +21,8 @@ export default async function RootPage() {
   const user = await getSessionUser();
 
   if (!user) {
-    const organization = await getPublicOrganizationInfo();
-    return <FrontPage organization={organization} />;
+    const [organization, leadDoctor] = await Promise.all([getPublicOrganizationInfo(), getPublicLeadDoctor()]);
+    return <FrontPage organization={organization} leadDoctor={leadDoctor} />;
   }
 
   const home = homeHrefFor(user);

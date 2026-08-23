@@ -5,6 +5,7 @@ import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPublicDoctors } from "@/features/doctors/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
@@ -14,6 +15,10 @@ export const metadata: Metadata = { title: "Doctors · TV Care" };
 export default async function DoctorsPage() {
   const [organization, doctorsResult] = await Promise.all([getPublicOrganizationInfo(), getPublicDoctors()]);
   const practiceName = organization?.name ?? "The Traveling Vet";
+  const doctors =
+    doctorsResult.status === "ok"
+      ? [...doctorsResult.data].sort((a, b) => Number(b.isLeadDoctor) - Number(a.isLeadDoctor))
+      : [];
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -32,7 +37,7 @@ export default async function DoctorsPage() {
           <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
             {doctorsResult.status === "error" ? (
               <ErrorState title="Doctors could not be loaded" />
-            ) : doctorsResult.data.length === 0 ? (
+            ) : doctors.length === 0 ? (
               <EmptyState
                 icon={Stethoscope}
                 title="No doctors listed yet"
@@ -40,7 +45,7 @@ export default async function DoctorsPage() {
               />
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {doctorsResult.data.map((doctor) => (
+                {doctors.map((doctor) => (
                   <Card key={doctor.id}>
                     <CardContent className="grid gap-2">
                       {doctor.photoUrl ? (
@@ -51,7 +56,10 @@ export default async function DoctorsPage() {
                           <Stethoscope className="size-6" aria-hidden />
                         </span>
                       )}
-                      <p className="font-medium">{doctor.fullName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{doctor.fullName}</p>
+                        {doctor.isLeadDoctor ? <Badge>Lead doctor</Badge> : null}
+                      </div>
                       {doctor.specialization ? (
                         <p className="text-muted-foreground text-sm">{doctor.specialization}</p>
                       ) : null}
