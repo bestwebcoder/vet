@@ -8,6 +8,11 @@
 
 create extension if not exists "btree_gist" with schema extensions;
 
+-- Postgres ships range types for timestamptz, date and numeric kinds, but not
+-- for plain time — the doctor_availability exclusion constraint below needs
+-- one to detect two windows overlapping on the same weekday.
+create type public.timerange as range (subtype = time);
+
 -- ---------------------------------------------------------------------------
 -- Clinic policy
 -- ---------------------------------------------------------------------------
@@ -151,7 +156,7 @@ alter table public.doctor_availability
     doctor_id with =,
     weekday with =,
     coalesce(visit_type, '*') with =,
-    timerange(starts_at, ends_at, '[)') with &&
+    public.timerange(starts_at, ends_at, '[)') with &&
   )
   where (deleted_at is null and is_active);
 

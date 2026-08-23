@@ -40,7 +40,7 @@ export type NavItem = {
 export const CLIENT_NAV: NavItem[] = [
   { label: "Home", href: "/client", icon: Home },
   { label: "My Pets", href: "/client/pets", icon: PawPrint },
-  { label: "Appointments", href: "/client/appointments", icon: CalendarDays, phase: 3 },
+  { label: "Appointments", href: "/client/appointments", icon: CalendarDays },
   { label: "Medical Records", href: "/client/records", icon: ClipboardList, phase: 4 },
   { label: "Prescriptions", href: "/client/prescriptions", icon: FileText, phase: 5 },
   { label: "Vaccinations", href: "/client/vaccinations", icon: Syringe, phase: 6 },
@@ -52,9 +52,9 @@ export const CLIENT_NAV: NavItem[] = [
 
 export const DOCTOR_NAV: NavItem[] = [
   { label: "Dashboard", href: "/doctor", icon: LayoutDashboard },
-  { label: "Appointments", href: "/doctor/appointments", icon: CalendarDays, phase: 3 },
+  { label: "Appointments", href: "/doctor/appointments", icon: CalendarDays },
   { label: "Patients", href: "/doctor/patients", icon: PawPrint },
-  { label: "Calendar", href: "/doctor/calendar", icon: CalendarDays, phase: 3 },
+  { label: "Calendar", href: "/doctor/calendar", icon: CalendarDays },
   { label: "SOAP", href: "/doctor/soap", icon: ClipboardList, phase: 4 },
   { label: "Prescriptions", href: "/doctor/prescriptions", icon: FileText, phase: 5 },
   { label: "Vaccinations", href: "/doctor/vaccinations", icon: Syringe, phase: 6 },
@@ -65,7 +65,7 @@ export const DOCTOR_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays, phase: 3 },
+  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays },
   { label: "Clients", href: "/admin/clients", icon: Users },
   { label: "Patients", href: "/admin/patients", icon: PawPrint },
   // Not in any earlier phase's scope: managing doctors appears only in the

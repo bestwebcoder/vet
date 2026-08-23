@@ -173,10 +173,14 @@ async function main() {
   const admin = await ensureUser(PEOPLE.admin.email, PEOPLE.admin.name, PEOPLE.admin.phone);
   await ensureRole(admin.id, "admin", organizationId);
 
+  // Saturday–Thursday, per the Bangladeshi work week; Friday (5) is the
+  // weekly holiday. Postgres's date_part('dow') numbering: 0 = Sunday.
+  const WORKING_WEEKDAYS = [6, 0, 1, 2, 3, 4];
+
   for (const [index, doctor] of PEOPLE.doctors.entries()) {
     const user = await ensureUser(doctor.email, doctor.name, doctor.phone);
     await ensureRole(user.id, "doctor", organizationId);
-    await ensureRow(
+    const doctorId = await ensureRow(
       "doctors",
       { user_id: user.id, organization_id: organizationId },
       {
@@ -185,6 +189,35 @@ async function main() {
         specialization: doctor.specialization,
       },
     );
+
+    // A doctor with no configured availability can never be booked — leaving
+    // the demo practice unusable for the one thing this phase is about.
+    // Windows are seeded once per doctor and left alone after that, so
+    // whatever an admin configures by hand through the app is never clobbered
+    // by a later re-run of this script.
+    const { data: existingWindow } = await db
+      .from("doctor_availability")
+      .select("id")
+      .eq("doctor_id", doctorId)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingWindow) {
+      const windows = WORKING_WEEKDAYS.flatMap((weekday) => [
+        { starts_at: "09:00", ends_at: "13:00" },
+        { starts_at: "14:00", ends_at: "18:00" },
+      ].map((window) => ({
+        doctor_id: doctorId,
+        organization_id: organizationId,
+        weekday,
+        starts_at: window.starts_at,
+        ends_at: window.ends_at,
+        slot_minutes: 30,
+      })));
+
+      const { error } = await db.from("doctor_availability").insert(windows);
+      if (error) throw error;
+    }
   }
 
   const staff = await ensureUser(PEOPLE.staff.email, PEOPLE.staff.name, PEOPLE.staff.phone);

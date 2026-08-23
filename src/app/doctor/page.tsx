@@ -1,15 +1,87 @@
-import { CalendarDays, ClipboardList, Stethoscope, Syringe, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  ClipboardList,
+  History,
+  Scissors,
+  Stethoscope,
+  Syringe,
+  Users,
+} from "lucide-react";
 
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { countAppointments } from "@/features/appointments/queries";
 import { getDoctorOverview, getRecentActivity } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
+import { getOwnDoctorRecord } from "@/features/doctors/queries";
 import { firstName } from "@/lib/names";
+import type { Metric } from "@/features/dashboard/queries";
+
+const NOT_OCCUPYING = ["cancelled", "no_show"];
 
 export default async function DoctorDashboardPage() {
   const user = await requireRole("doctor");
+  const doctor = await getOwnDoctorRecord();
+
   const [overview, activity] = await Promise.all([getDoctorOverview(), getRecentActivity()]);
+
+  let today: Metric = { status: "error" };
+  let upcoming: Metric = { status: "error" };
+  let emergency: Metric = { status: "error" };
+  let followUp: Metric = { status: "error" };
+  let surgery: Metric = { status: "error" };
+  let recentlySeen: Metric = { status: "error" };
+
+  if (doctor.status === "ok" && doctor.data) {
+    const doctorId = doctor.data.id;
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    [today, upcoming, emergency, followUp, surgery, recentlySeen] = await Promise.all([
+      countAppointments({
+        doctorId,
+        from: startOfToday.toISOString(),
+        to: startOfTomorrow.toISOString(),
+        excludeStatuses: NOT_OCCUPYING,
+      }),
+      countAppointments({
+        doctorId,
+        from: startOfTomorrow.toISOString(),
+        excludeStatuses: NOT_OCCUPYING,
+      }),
+      countAppointments({
+        doctorId,
+        visitType: "emergency",
+        from: now.toISOString(),
+        excludeStatuses: NOT_OCCUPYING,
+      }),
+      countAppointments({
+        doctorId,
+        visitType: "follow_up",
+        from: now.toISOString(),
+        excludeStatuses: NOT_OCCUPYING,
+      }),
+      countAppointments({
+        doctorId,
+        visitType: "surgery",
+        from: now.toISOString(),
+        excludeStatuses: NOT_OCCUPYING,
+      }),
+      countAppointments({
+        doctorId,
+        statuses: ["completed"],
+        from: thirtyDaysAgo.toISOString(),
+        to: now.toISOString(),
+      }),
+    ]);
+  }
 
   return (
     <div className="grid gap-8">
@@ -19,14 +91,26 @@ export default async function DoctorDashboardPage() {
       />
 
       <section className="grid gap-4">
-        <h2 className="sr-only">Needs attention</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <h2 className="text-base font-medium">Appointments</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <AttentionCard label="Today" metric={today} href="/doctor/calendar" icon={CalendarDays} />
+          <AttentionCard label="Upcoming" metric={upcoming} href="/doctor/appointments" icon={CalendarClock} />
+          <AttentionCard label="Emergencies" metric={emergency} href="/doctor/appointments" icon={AlertTriangle} />
+          <AttentionCard label="Follow-up visits" metric={followUp} href="/doctor/appointments" icon={Stethoscope} />
+          <AttentionCard label="Surgery schedule" metric={surgery} href="/doctor/appointments" icon={Scissors} />
           <AttentionCard
-            label="Appointments today"
-            metric={{ status: "pending", phase: 3 }}
+            label="Recently seen"
+            metric={recentlySeen}
             href="/doctor/appointments"
-            icon={CalendarDays}
+            icon={CalendarCheck}
+            description="Last 30 days"
           />
+        </div>
+      </section>
+
+      <section className="grid gap-4">
+        <h2 className="sr-only">Clinical</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
           <AttentionCard
             label="Records to complete"
             metric={{ status: "pending", phase: 4 }}
@@ -37,7 +121,7 @@ export default async function DoctorDashboardPage() {
             label="Follow-ups due"
             metric={{ status: "pending", phase: 4 }}
             href="/doctor/follow-ups"
-            icon={Stethoscope}
+            icon={History}
           />
           <AttentionCard
             label="Vaccinations due"

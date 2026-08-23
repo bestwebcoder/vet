@@ -1,4 +1,4 @@
-import { PawPrint, Pencil } from "lucide-react";
+import { CalendarPlus, PawPrint, Pencil } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -42,6 +42,14 @@ export function PetRecordFrame({
             • {pet.age}
           </p>
         </div>
+
+        <Link
+          href={`/${basePath.split("/")[1]}/appointments/new?petId=${pet.id}`}
+          className={buttonVariants({ variant: "outline", size: "touch" })}
+        >
+          <CalendarPlus aria-hidden />
+          Book appointment
+        </Link>
 
         <Link
           href={`${basePath}/edit`}

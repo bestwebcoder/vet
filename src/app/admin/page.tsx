@@ -3,12 +3,26 @@ import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users 
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { countAppointments } from "@/features/appointments/queries";
 import { getAdminOverview, getRecentActivity } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole("admin", "super_admin");
-  const [overview, activity] = await Promise.all([getAdminOverview(), getRecentActivity()]);
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+
+  const [overview, activity, appointmentsToday] = await Promise.all([
+    getAdminOverview(),
+    getRecentActivity(),
+    countAppointments({
+      from: startOfToday.toISOString(),
+      to: startOfTomorrow.toISOString(),
+      excludeStatuses: ["cancelled", "no_show"],
+    }),
+  ]);
 
   return (
     <div className="grid gap-8">
@@ -22,7 +36,7 @@ export default async function AdminDashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <AttentionCard
             label="Appointments today"
-            metric={{ status: "pending", phase: 3 }}
+            metric={appointmentsToday}
             href="/admin/appointments"
             icon={CalendarDays}
           />

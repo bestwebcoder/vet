@@ -71,7 +71,13 @@ describe("admin dashboard", () => {
     expect(html).toContain("Unpaid invoices");
     expect(html).toContain("Available in phase 7");
     expect(html).toContain("Available in phase 6");
-    expect(html).toContain("Available in phase 3");
+  });
+
+  it("shows a real count of appointments today, not a placeholder", async () => {
+    const html = await (await adminSession.page("/admin")).text();
+
+    expect(html).toContain("Appointments today");
+    expect(html).not.toContain("Available in phase 3");
   });
 
   it("shows the audit trail rather than an empty panel", async () => {
@@ -87,9 +93,16 @@ describe("doctor dashboard", () => {
   it("answers what needs attention today", async () => {
     const html = await (await doctorSession.page("/doctor")).text();
 
-    expect(html).toContain("Appointments today");
+    expect(html).toContain("Emergencies");
+    expect(html).toContain("Surgery schedule");
     expect(html).toContain("Records to complete");
     expect(html).toContain("Follow-ups due");
+  });
+
+  it("shows a real count of today's appointments, not a placeholder", async () => {
+    const html = await (await doctorSession.page("/doctor")).text();
+
+    expect(html).not.toContain("Available in phase 3");
   });
 
   it("shows a real count of clients at the practice", async () => {

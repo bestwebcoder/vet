@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { CalendarDays, PawPrint, Plus, Receipt, Syringe } from "lucide-react";
 import Link from "next/link";
 
@@ -9,13 +10,25 @@ import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
+import { getNextAppointmentForClient } from "@/features/appointments/queries";
+import { getOwnClientRecord } from "@/features/clients/queries";
 import { listPets, signedPhotoUrl } from "@/features/pets/queries";
 import { firstName } from "@/lib/names";
 import type { Metric } from "@/features/dashboard/queries";
 
 export default async function ClientDashboardPage() {
   const user = await requireRole("client");
-  const pets = await listPets();
+  const [pets, client] = await Promise.all([listPets(), getOwnClientRecord()]);
+
+  const nextAppointment =
+    client.status === "ok" && client.data ? await getNextAppointmentForClient(client.data.id) : null;
+
+  const appointmentMetric: Metric =
+    nextAppointment === null
+      ? { status: "error" }
+      : nextAppointment.status === "error"
+        ? { status: "error" }
+        : { status: "ok", value: nextAppointment.data ? 1 : 0 };
 
   const photos =
     pets.status === "ok"
@@ -38,9 +51,14 @@ export default async function ClientDashboardPage() {
           <AttentionCard label="My pets" metric={petMetric} href="/client/pets" icon={PawPrint} />
           <AttentionCard
             label="Upcoming appointments"
-            metric={{ status: "pending", phase: 3 }}
+            metric={appointmentMetric}
             href="/client/appointments"
             icon={CalendarDays}
+            description={
+              nextAppointment?.status === "ok" && nextAppointment.data
+                ? `${nextAppointment.data.doctorName} · ${format(new Date(nextAppointment.data.startsAt), "d MMM, h:mm a")}`
+                : undefined
+            }
           />
           <AttentionCard
             label="Vaccinations due"

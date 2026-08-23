@@ -159,6 +159,12 @@ export function describeAction(action: string): string {
     "branches.insert": "Branch added",
     "branches.update": "Branch updated",
     "organizations.update": "Organisation updated",
+    "appointments.insert": "Appointment booked",
+    "appointments.update": "Appointment updated",
+    "services.insert": "Service added",
+    "services.update": "Service updated",
+    "doctor_availability.insert": "Availability window added",
+    "doctor_availability.update": "Availability window updated",
   };
 
   return readable[action] ?? action;

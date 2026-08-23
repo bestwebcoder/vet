@@ -1,9 +1,10 @@
+import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { NavLinks } from "@/components/shell/nav-links";
 import type { Area } from "@/components/shell/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
 import type { SessionUser } from "@/features/auth/session";
 
@@ -33,6 +34,15 @@ export function AppShell({
           <NavLinks areaKey={area.key} />
         </div>
         <div className="border-t p-3">
+          {area.key !== "client" ? (
+            <Link
+              href={`${area.href}/search`}
+              className={buttonVariants({ variant: "outline", size: "sm", className: "mb-3 w-full" })}
+            >
+              <Search aria-hidden />
+              Search
+            </Link>
+          ) : null}
           <UserPanel user={user} />
         </div>
       </aside>
@@ -44,7 +54,16 @@ export function AppShell({
             <span className="text-sm font-semibold tracking-tight">TV Care</span>
             <span className="text-muted-foreground text-xs">{area.label}</span>
           </Link>
-          <div className="ml-auto pr-1">
+          <div className="ml-auto flex items-center gap-1 pr-1">
+            {area.key !== "client" ? (
+              <Link
+                href={`${area.href}/search`}
+                className={buttonVariants({ variant: "ghost", size: "icon" })}
+                aria-label="Search"
+              >
+                <Search aria-hidden />
+              </Link>
+            ) : null}
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 Sign out

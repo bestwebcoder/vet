@@ -20,6 +20,8 @@ type DatePickerProps = {
   /** Restricts selection, e.g. a date of birth cannot be in the future. */
   fromDate?: Date;
   toDate?: Date;
+  /** For a step of a larger flow that needs the chosen date outside this component. */
+  onSelect?: (date: Date | undefined) => void;
 };
 
 /**
@@ -38,6 +40,7 @@ export function DatePicker({
   disabled,
   fromDate,
   toDate,
+  onSelect,
 }: DatePickerProps) {
   const [selected, setSelected] = useState<Date | undefined>(defaultValue);
   const [open, setOpen] = useState(false);
@@ -86,6 +89,7 @@ export function DatePicker({
             ]}
             onSelect={(date) => {
               setSelected(date);
+              onSelect?.(date);
               setOpen(false);
             }}
           />

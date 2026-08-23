@@ -41,6 +41,18 @@ export const fullNameSchema = z
 
 export const uuidSchema = z.uuid("Select an option from the list");
 
+/** A calendar date as `yyyy-MM-dd`, the same shape a `DatePicker` submits. */
+export const isoDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date");
+
+/** A 24-hour time as `HH:mm`. */
+export const timeSchema = z
+  .string()
+  .trim()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose a time");
+
 /** Optional free text, with blank normalised to null for the database. */
 export function optionalText(max: number, label = "This") {
   return z

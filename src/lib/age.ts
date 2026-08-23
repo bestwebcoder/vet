@@ -27,6 +27,34 @@ export function parseDateOnly(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
+// Bangladesh has kept a fixed UTC+6 offset since 2009 — no daylight saving to
+// account for, so a literal offset is enough without a timezone library.
+const DHAKA_UTC_OFFSET = "+06:00";
+
+/** A wall-clock date and time in the practice's timezone, as a UTC instant. */
+export function dhakaInstant(date: string, time: string): Date {
+  return new Date(`${date}T${time}:00${DHAKA_UTC_OFFSET}`);
+}
+
+/** The current moment, expressed as the practice's own wall-clock date and time. */
+export function nowInDhaka(now: Date = new Date()): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DHAKA,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "00";
+  return {
+    date: `${get("year")}-${get("month")}-${get("day")}`,
+    time: `${get("hour")}:${get("minute")}`,
+  };
+}
+
 export type Age = { years: number; months: number; days: number };
 
 export function ageFrom(dateOfBirth: string | Date, now?: Date): Age | null {
