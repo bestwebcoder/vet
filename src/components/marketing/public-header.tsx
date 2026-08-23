@@ -1,14 +1,8 @@
 import Link from "next/link";
 
+import { PUBLIC_NAV_LINKS } from "@/components/marketing/nav-links";
 import { PublicMobileNav } from "@/components/marketing/public-mobile-nav";
 import { buttonVariants } from "@/components/ui/button";
-
-const LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About Us" },
-  { href: "/doctors", label: "Doctors" },
-  { href: "/contact", label: "Contact Us" },
-];
 
 export function PublicHeader({ practiceName }: { practiceName: string }) {
   return (
@@ -20,7 +14,7 @@ export function PublicHeader({ practiceName }: { practiceName: string }) {
         </Link>
 
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Main">
-          {LINKS.map((link) => (
+          {PUBLIC_NAV_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="hover:text-foreground text-sm font-medium">
               {link.label}
             </Link>

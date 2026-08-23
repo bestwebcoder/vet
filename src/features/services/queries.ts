@@ -1,5 +1,6 @@
 import { formatCurrency } from "@/lib/currency";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * Service reads. Booking only ever needed name/duration (Phase 3); Phase 7
@@ -110,6 +111,34 @@ export async function getService(serviceId: string): Promise<Result<ServiceSumma
   }
 
   return { status: "ok", data: data ? toSummary(data) : null };
+}
+
+/**
+ * The public Services page — reached before any session exists, so it
+ * goes through the service role like every other public read. Real
+ * prices, pulled from the same price_paisa every invoice already uses —
+ * never a fabricated "starting from" figure (CLAUDE.md forbids hardcoding
+ * prices, and this stays correct automatically if an admin changes one).
+ * The home-visit fee is a billing surcharge, not a browsable service, so
+ * it's excluded here the same way it's excluded from booking's service list.
+ */
+export async function getPublicServices(): Promise<Result<ServiceSummary[]>> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("services")
+    .select(SERVICE_COLUMNS)
+    .eq("is_active", true)
+    .eq("is_home_visit_fee", false)
+    .is("deleted_at", null)
+    .order("sort_order");
+
+  if (error) {
+    console.error("[services] public list failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (data ?? []).map(toSummary) };
 }
 
 /** The configured home-visit fee, if an admin has marked one — §7.3. */

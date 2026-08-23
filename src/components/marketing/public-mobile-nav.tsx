@@ -4,16 +4,10 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 import Link from "next/link";
 
+import { PUBLIC_NAV_LINKS } from "@/components/marketing/nav-links";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-
-const LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/about", label: "About Us" },
-  { href: "/doctors", label: "Doctors" },
-  { href: "/contact", label: "Contact Us" },
-];
 
 export function PublicMobileNav() {
   const [open, setOpen] = useState(false);
@@ -33,7 +27,7 @@ export function PublicMobileNav() {
           <SheetDescription>The Traveling Vet</SheetDescription>
         </SheetHeader>
         <nav className="grid gap-1 p-3">
-          {LINKS.map((link) => (
+          {PUBLIC_NAV_LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
