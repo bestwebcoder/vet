@@ -9,6 +9,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { listPets, signedPhotoUrl } from "@/features/pets/queries";
+import { listPetDewormingStatuses } from "@/features/deworming/queries";
+import { listPetVaccinationStatuses } from "@/features/vaccinations/queries";
 
 export const metadata: Metadata = { title: "My pets · TV Care" };
 
@@ -16,10 +18,20 @@ export default async function ClientPetsPage() {
   await requireRole("client");
   const result = await listPets();
 
-  const photos =
-    result.status === "ok"
-      ? await Promise.all(result.data.map((pet) => signedPhotoUrl(pet.photoPath)))
-      : [];
+  const petIds = result.status === "ok" ? result.data.map((pet) => pet.id) : [];
+
+  const [photos, vaccinationResult, dewormingResult] = await Promise.all([
+    result.status === "ok" ? Promise.all(result.data.map((pet) => signedPhotoUrl(pet.photoPath))) : Promise.resolve([]),
+    listPetVaccinationStatuses(petIds),
+    listPetDewormingStatuses(petIds),
+  ]);
+
+  const vaccinationByPet = new Map(
+    (vaccinationResult.status === "ok" ? vaccinationResult.data : []).map((row) => [row.petId, row]),
+  );
+  const dewormingByPet = new Map(
+    (dewormingResult.status === "ok" ? dewormingResult.data : []).map((row) => [row.petId, row]),
+  );
 
   return (
     <div className="grid gap-6">
@@ -73,6 +85,8 @@ export default async function ClientPetsPage() {
               pet={pet}
               photoUrl={photos[index] ?? null}
               href={`/client/pets/${pet.id}`}
+              nextVaccination={vaccinationByPet.get(pet.id) ?? null}
+              nextDeworming={dewormingByPet.get(pet.id) ?? null}
             />
           ))}
         </div>

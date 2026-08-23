@@ -13,7 +13,10 @@ import { requireRole } from "@/features/auth/session";
 import { getNextAppointmentForClient } from "@/features/appointments/queries";
 import { getOwnClientRecord } from "@/features/clients/queries";
 import { listPets, signedPhotoUrl } from "@/features/pets/queries";
+import { listPetDewormingStatuses } from "@/features/deworming/queries";
+import { listPetVaccinationStatuses } from "@/features/vaccinations/queries";
 import { firstName } from "@/lib/names";
+import { getDueInfo } from "@/lib/due-window";
 import type { Metric } from "@/features/dashboard/queries";
 
 export default async function ClientDashboardPage() {
@@ -30,13 +33,32 @@ export default async function ClientDashboardPage() {
         ? { status: "error" }
         : { status: "ok", value: nextAppointment.data ? 1 : 0 };
 
-  const photos =
-    pets.status === "ok"
-      ? await Promise.all(pets.data.map((pet) => signedPhotoUrl(pet.photoPath)))
-      : [];
+  const petIds = pets.status === "ok" ? pets.data.map((pet) => pet.id) : [];
+
+  const [photos, vaccinationResult, dewormingResult] = await Promise.all([
+    pets.status === "ok" ? Promise.all(pets.data.map((pet) => signedPhotoUrl(pet.photoPath))) : Promise.resolve([]),
+    listPetVaccinationStatuses(petIds),
+    listPetDewormingStatuses(petIds),
+  ]);
+
+  const vaccinationByPet = new Map(
+    (vaccinationResult.status === "ok" ? vaccinationResult.data : []).map((row) => [row.petId, row]),
+  );
+  const dewormingByPet = new Map(
+    (dewormingResult.status === "ok" ? dewormingResult.data : []).map((row) => [row.petId, row]),
+  );
 
   const petMetric: Metric =
     pets.status === "ok" ? { status: "ok", value: pets.data.length } : { status: "error" };
+
+  const vaccinationsDueMetric: Metric =
+    vaccinationResult.status === "ok"
+      ? {
+          status: "ok",
+          value: vaccinationResult.data.filter((row) => ["due_in_7", "due_today", "overdue"].includes(getDueInfo(row.nextDueDate).status))
+            .length,
+        }
+      : { status: "error" };
 
   return (
     <div className="grid gap-8">
@@ -62,7 +84,7 @@ export default async function ClientDashboardPage() {
           />
           <AttentionCard
             label="Vaccinations due"
-            metric={{ status: "pending", phase: 6 }}
+            metric={vaccinationsDueMetric}
             href="/client/vaccinations"
             icon={Syringe}
           />
@@ -124,6 +146,8 @@ export default async function ClientDashboardPage() {
                 pet={pet}
                 photoUrl={photos[index] ?? null}
                 href={`/client/pets/${pet.id}`}
+                nextVaccination={vaccinationByPet.get(pet.id) ?? null}
+                nextDeworming={dewormingByPet.get(pet.id) ?? null}
               />
             ))}
           </div>

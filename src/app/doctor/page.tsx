@@ -19,7 +19,9 @@ import { getDoctorOverview, getRecentActivity } from "@/features/dashboard/queri
 import { requireRole } from "@/features/auth/session";
 import { getOwnDoctorRecord } from "@/features/doctors/queries";
 import { listDraftSoapRecordsForDoctor, listFollowUpsDueForDoctor } from "@/features/soap/queries";
+import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
 import { firstName } from "@/lib/names";
+import { getDueInfo } from "@/lib/due-window";
 import type { Metric } from "@/features/dashboard/queries";
 
 const NOT_OCCUPYING = ["cancelled", "no_show"];
@@ -38,6 +40,16 @@ export default async function DoctorDashboardPage() {
   let recentlySeen: Metric = { status: "error" };
   let recordsToComplete: Metric = { status: "error" };
   let followUpsDue: Metric = { status: "error" };
+
+  const vaccinationStatuses = await listPracticeVaccinationStatuses();
+  const vaccinationsDue: Metric =
+    vaccinationStatuses.status === "ok"
+      ? {
+          status: "ok",
+          value: vaccinationStatuses.data.filter((row) => ["due_in_7", "due_today", "overdue"].includes(getDueInfo(row.nextDueDate).status))
+            .length,
+        }
+      : { status: "error" };
 
   if (doctor.status === "ok" && doctor.data) {
     const doctorId = doctor.data.id;
@@ -138,7 +150,7 @@ export default async function DoctorDashboardPage() {
           />
           <AttentionCard
             label="Vaccinations due"
-            metric={{ status: "pending", phase: 6 }}
+            metric={vaccinationsDue}
             href="/doctor/vaccinations"
             icon={Syringe}
           />

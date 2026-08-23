@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import type { PetDetail } from "@/features/pets/queries";
 import { Card, CardContent } from "@/components/ui/card";
+import { getDueInfo } from "@/lib/due-window";
 import { cn } from "@/lib/utils";
 
 const SEX_LABEL: Record<string, string> = {
@@ -20,10 +21,15 @@ export function PetCard({
   pet,
   photoUrl,
   href,
+  nextVaccination,
+  nextDeworming,
 }: {
   pet: PetDetail;
   photoUrl: string | null;
   href: string;
+  /** Vaccine name and next due date, or null when none is on record yet. */
+  nextVaccination?: { vaccineName: string; nextDueDate: string | null } | null;
+  nextDeworming?: { product: string; nextDueDate: string } | null;
 }) {
   return (
     <Card className="hover:border-ring focus-within:border-ring transition-colors">
@@ -63,8 +69,16 @@ export function PetCard({
             <span className="text-muted-foreground/80 mt-1 grid gap-0.5 text-xs">
               {/* Deliberately shown as unscheduled rather than hidden: an owner
                   should be able to see that nothing is booked. */}
-              <span>Next vaccination — not scheduled yet</span>
-              <span>Next deworming — not scheduled yet</span>
+              <span>
+                Next vaccination —{" "}
+                {nextVaccination
+                  ? `${nextVaccination.vaccineName}, ${getDueInfo(nextVaccination.nextDueDate).label}`
+                  : "not scheduled yet"}
+              </span>
+              <span>
+                Next deworming —{" "}
+                {nextDeworming ? `${nextDeworming.product}, ${getDueInfo(nextDeworming.nextDueDate).label}` : "not scheduled yet"}
+              </span>
             </span>
           </span>
         </Link>

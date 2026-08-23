@@ -1,11 +1,14 @@
-import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users } from "lucide-react";
+import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users, Worm } from "lucide-react";
 
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { countAppointments } from "@/features/appointments/queries";
-import { getAdminOverview, getRecentActivity } from "@/features/dashboard/queries";
+import { getAdminOverview, getRecentActivity, type Metric } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
+import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
+import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
+import { getDueInfo } from "@/lib/due-window";
 
 export default async function AdminDashboardPage() {
   const user = await requireRole("admin", "super_admin");
@@ -14,7 +17,7 @@ export default async function AdminDashboardPage() {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
 
-  const [overview, activity, appointmentsToday] = await Promise.all([
+  const [overview, activity, appointmentsToday, vaccinationStatuses, dewormingStatuses] = await Promise.all([
     getAdminOverview(),
     getRecentActivity(),
     countAppointments({
@@ -22,7 +25,28 @@ export default async function AdminDashboardPage() {
       to: startOfTomorrow.toISOString(),
       excludeStatuses: ["cancelled", "no_show"],
     }),
+    listPracticeVaccinationStatuses(),
+    listPracticeDewormingStatuses(),
   ]);
+
+  const vaccinationsDueToday: Metric =
+    vaccinationStatuses.status === "ok"
+      ? {
+          status: "ok",
+          value: vaccinationStatuses.data.filter((row) => ["due_today", "overdue"].includes(getDueInfo(row.nextDueDate).status))
+            .length,
+        }
+      : { status: "error" };
+
+  const dewormingDueThisWeek: Metric =
+    dewormingStatuses.status === "ok"
+      ? {
+          status: "ok",
+          value: dewormingStatuses.data.filter((row) =>
+            ["due_in_7", "due_today", "overdue"].includes(getDueInfo(row.nextDueDate).status),
+          ).length,
+        }
+      : { status: "error" };
 
   return (
     <div className="grid gap-8">
@@ -47,10 +71,16 @@ export default async function AdminDashboardPage() {
             icon={Receipt}
           />
           <AttentionCard
-            label="Vaccinations due"
-            metric={{ status: "pending", phase: 6 }}
+            label="Vaccinations due today"
+            metric={vaccinationsDueToday}
             href="/admin/vaccinations"
             icon={Syringe}
+          />
+          <AttentionCard
+            label="Deworming due this week"
+            metric={dewormingDueThisWeek}
+            href="/admin/deworming"
+            icon={Worm}
           />
           <AttentionCard
             label="Registered clients"

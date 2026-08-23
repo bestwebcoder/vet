@@ -265,9 +265,9 @@ describe("the patient record is the same record everywhere", () => {
   });
 
   it("renders unbuilt tabs the same way", async () => {
-    const html = await (await adminSession.page(`/admin/patients/${petId}/vaccinations`)).text();
+    const html = await (await adminSession.page(`/admin/patients/${petId}/billing`)).text();
 
-    expect(html).toContain("Vaccinations is not available yet");
+    expect(html).toContain("Billing is not available yet");
   });
 });
 

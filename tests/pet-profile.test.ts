@@ -135,11 +135,7 @@ describe("overview", () => {
 });
 
 describe("unbuilt tabs", () => {
-  it.each([
-    ["vaccinations", "Vaccinations"],
-    ["deworming", "Deworming"],
-    ["billing", "Billing"],
-  ])("explains that %s is not available yet", async (slug, label) => {
+  it.each([["billing", "Billing"]])("explains that %s is not available yet", async (slug, label) => {
     const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
     const html = await response.text();
 
@@ -154,12 +150,14 @@ describe("unbuilt tabs", () => {
   });
 });
 
-describe("built in Phases 4 and 5", () => {
+describe("built in Phases 4, 5 and 6", () => {
   it.each([
     ["medical-history", "No diagnoses recorded yet"],
     ["visits", "No visits recorded yet"],
     ["diagnostics", "No diagnostic tests yet"],
     ["prescriptions", "No prescriptions yet"],
+    ["vaccinations", "No vaccinations recorded yet"],
+    ["deworming", "No deworming recorded yet"],
   ])("%s shows real content instead of a coming-soon placeholder", async (slug, emptyStateText) => {
     const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
     const html = await response.text();

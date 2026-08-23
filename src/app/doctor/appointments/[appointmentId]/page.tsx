@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ClipboardList, FileText } from "lucide-react";
+import { ClipboardList, FileText, Syringe, Worm } from "lucide-react";
 
 import { AppointmentStatusBadge } from "@/components/appointments/status-badge";
 import { AppointmentStatusActions } from "@/components/appointments/status-actions";
@@ -131,6 +131,20 @@ export default async function DoctorAppointmentDetailPage({
             {prescriptionLabel}
           </Link>
         ) : null}
+        <Link
+          href={`/doctor/appointments/${appointment.id}/vaccinations`}
+          className={buttonVariants({ variant: "outline", size: "touch" })}
+        >
+          <Syringe aria-hidden />
+          Vaccinations
+        </Link>
+        <Link
+          href={`/doctor/appointments/${appointment.id}/deworming`}
+          className={buttonVariants({ variant: "outline", size: "touch" })}
+        >
+          <Worm aria-hidden />
+          Deworming
+        </Link>
       </div>
 
       {!isFinal ? (

@@ -102,9 +102,9 @@ describe("no role reaches another role's area", () => {
 
 describe("unbuilt navigation items", () => {
   it("answers a known navigation item with a coming-soon page", async () => {
-    // Vaccinations, not pets or appointments: those are built now, so they
+    // Invoices, not pets or appointments: those are built now, so they
     // would no longer be a test of the coming-soon fallback.
-    const response = await clientSession.get("/client/vaccinations");
+    const response = await clientSession.get("/client/invoices");
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("not available yet");

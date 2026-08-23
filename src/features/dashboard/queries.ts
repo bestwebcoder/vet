@@ -176,6 +176,12 @@ export function describeAction(action: string): string {
     "prescriptions.update": "Prescription updated",
     "prescription_items.insert": "Prescription item added",
     "prescription_items.update": "Prescription item updated",
+    "vaccination_schedules.insert": "Vaccination schedule added",
+    "vaccination_schedules.update": "Vaccination schedule updated",
+    "vaccinations.insert": "Vaccination recorded",
+    "vaccinations.update": "Vaccination updated",
+    "deworming_records.insert": "Deworming recorded",
+    "deworming_records.update": "Deworming updated",
   };
 
   return readable[action] ?? action;
