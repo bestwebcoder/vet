@@ -37,4 +37,15 @@ describe("parseServerEnv", () => {
       /SUPABASE_SERVICE_ROLE_KEY/,
     );
   });
+
+  it("accepts an entirely unconfigured notification channel set", () => {
+    const env = parseServerEnv({ SUPABASE_SERVICE_ROLE_KEY: "service-key" });
+    expect(env.SMTP_HOST).toBeUndefined();
+    expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
+  });
+
+  it("coerces SMTP_PORT to a number", () => {
+    const env = parseServerEnv({ SUPABASE_SERVICE_ROLE_KEY: "service-key", SMTP_PORT: "54325" });
+    expect(env.SMTP_PORT).toBe(54325);
+  });
 });

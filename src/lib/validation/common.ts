@@ -64,6 +64,17 @@ export function optionalIsoDate(label = "This date") {
     .refine((value) => value === null || /^\d{4}-\d{2}-\d{2}$/.test(value), `Choose a valid ${label.toLowerCase()}`);
 }
 
+/** An optional 24-hour time as `HH:mm`, with blank normalised to null. */
+export function optionalTime(label = "This time") {
+  return z
+    .string()
+    .trim()
+    .transform((value) => (value === "" ? null : value))
+    .nullish()
+    .transform((value) => value ?? null)
+    .refine((value) => value === null || /^([01]\d|2[0-3]):[0-5]\d$/.test(value), `Choose a valid ${label.toLowerCase()}`);
+}
+
 /** Optional free text, with blank normalised to null for the database. */
 export function optionalText(max: number, label = "This") {
   return z

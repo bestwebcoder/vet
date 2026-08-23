@@ -182,10 +182,10 @@ describe("navigation", () => {
     expect(petsLink.slice(0, 200)).not.toContain("Soon");
   });
 
-  it("still marks genuinely unbuilt screens", async () => {
+  it("has no unbuilt screens left — Phase 9 was the last one", async () => {
     const html = await (await ownerSession.page("/client")).text();
 
-    expect(html).toContain("Soon");
+    expect(html).not.toContain("Soon");
   });
 });
 

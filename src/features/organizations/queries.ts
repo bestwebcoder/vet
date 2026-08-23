@@ -8,14 +8,20 @@ import { createClient } from "@/lib/supabase/server";
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
-export async function getOwnOrganization(
-  organizationId: string,
-): Promise<Result<{ id: string; name: string; paymentInstructions: string | null } | null>> {
+export type Organization = {
+  id: string;
+  name: string;
+  paymentInstructions: string | null;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+};
+
+export async function getOwnOrganization(organizationId: string): Promise<Result<Organization | null>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, payment_instructions")
+    .select("id, name, payment_instructions, quiet_hours_start, quiet_hours_end")
     .eq("id", organizationId)
     .maybeSingle();
 
@@ -26,6 +32,14 @@ export async function getOwnOrganization(
 
   return {
     status: "ok",
-    data: data ? { id: data.id, name: data.name, paymentInstructions: data.payment_instructions } : null,
+    data: data
+      ? {
+          id: data.id,
+          name: data.name,
+          paymentInstructions: data.payment_instructions,
+          quietHoursStart: data.quiet_hours_start,
+          quietHoursEnd: data.quiet_hours_end,
+        }
+      : null,
   };
 }

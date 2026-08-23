@@ -461,13 +461,18 @@ describe("reminder engine", () => {
       .update({ status: "issued", issued_at: new Date().toISOString(), due_date: "2030-01-01" })
       .eq("id", invoice!.id);
 
+    // Phase 9 fans out across every enabled channel (4 by default), and
+    // issuing an invoice enqueues both the due-date reminder and the
+    // immediate "issued" notification — 8 rows total, not 1.
     const { data: issuedNotifications } = await admin
       .from("notifications")
       .select("id, type, status")
       .eq("related_table", "invoices")
       .eq("related_id", invoice!.id);
-    expect(issuedNotifications).toHaveLength(1);
-    expect(issuedNotifications![0]).toMatchObject({ type: "invoice_reminder", status: "scheduled" });
+    expect(issuedNotifications).toHaveLength(8);
+    expect(issuedNotifications!.every((row) => row.status === "scheduled")).toBe(true);
+    expect(issuedNotifications!.filter((row) => row.type === "invoice_reminder")).toHaveLength(4);
+    expect(issuedNotifications!.filter((row) => row.type === "invoice_issued")).toHaveLength(4);
 
     const { data: payment } = await adminA
       .from("payments")
@@ -480,8 +485,10 @@ describe("reminder engine", () => {
       .select("id, type, status")
       .eq("related_table", "payments")
       .eq("related_id", payment!.id);
-    expect(paymentNotifications).toHaveLength(1);
-    expect(paymentNotifications![0]).toMatchObject({ type: "payment_confirmation", status: "scheduled" });
+    expect(paymentNotifications).toHaveLength(4);
+    expect(paymentNotifications!.every((row) => row.type === "payment_confirmation" && row.status === "scheduled")).toBe(
+      true,
+    );
   });
 });
 

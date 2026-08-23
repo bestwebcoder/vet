@@ -46,7 +46,7 @@ export const CLIENT_NAV: NavItem[] = [
   { label: "Vaccinations", href: "/client/vaccinations", icon: Syringe },
   { label: "Deworming", href: "/client/deworming", icon: Worm },
   { label: "Invoices", href: "/client/invoices", icon: Receipt },
-  { label: "Notifications", href: "/client/notifications", icon: Bell, phase: 9 },
+  { label: "Notifications", href: "/client/notifications", icon: Bell },
   { label: "Profile", href: "/client/profile", icon: UserCog },
 ];
 
@@ -82,7 +82,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe },
   { label: "Deworming", href: "/admin/deworming", icon: Worm },
   { label: "Reports", href: "/admin/reports", icon: FileText },
-  { label: "Notifications", href: "/admin/notifications", icon: Bell, phase: 9 },
+  { label: "Notifications", href: "/admin/notifications", icon: Bell },
   { label: "Settings", href: "/admin/settings", icon: Settings, phase: 10 },
 ];
 

@@ -240,7 +240,7 @@ describe("client visibility", () => {
 });
 
 describe("reminder engine", () => {
-  it("creates one scheduled notification and logs it when a due date is set", async () => {
+  it("creates one scheduled notification per channel and logs it when a due date is set", async () => {
     const appointmentId = await insertAppointment();
 
     const { data: vaccination, error } = await doctorA
@@ -264,13 +264,14 @@ describe("reminder engine", () => {
       .eq("related_table", "vaccinations")
       .eq("related_id", vaccination!.id);
 
-    expect(notifications).toHaveLength(1);
-    expect(notifications![0]).toMatchObject({
-      type: "vaccination_reminder",
-      status: "scheduled",
-      channel: "in_app",
-      recipient_user_id: clientUserIdA,
-    });
+    // Phase 9 fans out one row per enabled channel — every client starts
+    // subscribed to all four (§9.4) — rather than the single hardcoded
+    // in_app row Phase 6 originally wrote.
+    expect(notifications).toHaveLength(4);
+    expect(new Set(notifications!.map((row) => row.channel))).toEqual(new Set(["email", "sms", "whatsapp", "push"]));
+    for (const row of notifications!) {
+      expect(row).toMatchObject({ type: "vaccination_reminder", status: "scheduled", recipient_user_id: clientUserIdA });
+    }
 
     const { data: logs } = await admin
       .from("notification_logs")
@@ -278,7 +279,7 @@ describe("reminder engine", () => {
       .eq("notification_id", notifications![0].id);
     expect((logs ?? []).some((row) => row.event === "scheduled")).toBe(true);
 
-    // Editing the due date updates the existing reminder rather than creating a second one.
+    // Editing the due date updates the existing four reminders rather than creating four more.
     const { error: updateErr } = await doctorA
       .from("vaccinations")
       .update({ next_due_date: "2026-12-15" })
@@ -291,8 +292,8 @@ describe("reminder engine", () => {
       .eq("related_table", "vaccinations")
       .eq("related_id", vaccination!.id);
 
-    expect(notificationsAfterUpdate).toHaveLength(1);
-    expect(notificationsAfterUpdate![0].id).toBe(notifications![0].id);
+    expect(notificationsAfterUpdate).toHaveLength(4);
+    expect(new Set(notificationsAfterUpdate!.map((row) => row.id))).toEqual(new Set(notifications!.map((row) => row.id)));
   });
 
   it("creates nothing when no due date is recorded", async () => {

@@ -102,9 +102,9 @@ describe("no role reaches another role's area", () => {
 
 describe("unbuilt navigation items", () => {
   it("answers a known navigation item with a coming-soon page", async () => {
-    // Notifications, not pets or appointments: those are built now, so they
-    // would no longer be a test of the coming-soon fallback.
-    const response = await clientSession.get("/client/notifications");
+    // Settings, not client/doctor screens: every client and doctor nav item
+    // is built as of Phase 9. Only ADMIN_NAV still has a Phase 10 entry.
+    const response = await adminSession.get("/admin/settings");
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("not available yet");
