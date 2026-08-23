@@ -105,6 +105,50 @@ export async function getAdminRevenue(): Promise<AdminRevenue> {
   return { todayRevenuePaisa, monthRevenuePaisa, outstandingBalancePaisa, unpaidInvoices };
 }
 
+export type AdminOperationalSummary = {
+  newClients: Metric;
+  newPatients: Metric;
+  upcomingSurgeries: Metric;
+  doctorsOnDutyToday: Metric;
+};
+
+const NOT_FINAL_STATUSES = ["completed", "cancelled", "no_show"];
+
+/** §8.7 — the admin dashboard's remaining cards. */
+export async function getAdminOperationalSummary(): Promise<AdminOperationalSummary> {
+  const supabase = await createClient();
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  const todayWeekday = now.getDay();
+
+  const [newClientsResult, newPatientsResult, surgeriesResult, availabilityResult] = await Promise.all([
+    supabase.from("clients").select("*", { count: "exact", head: true }).is("deleted_at", null).gte("created_at", sevenDaysAgo),
+    supabase.from("pets").select("*", { count: "exact", head: true }).is("deleted_at", null).gte("created_at", sevenDaysAgo),
+    supabase
+      .from("appointments")
+      .select("*", { count: "exact", head: true })
+      .eq("visit_type", "surgery")
+      .not("status", "in", `(${NOT_FINAL_STATUSES.join(",")})`)
+      .gte("starts_at", now.toISOString()),
+    supabase
+      .from("doctor_availability")
+      .select("doctor_id")
+      .eq("weekday", todayWeekday)
+      .eq("is_active", true)
+      .is("deleted_at", null),
+  ]);
+
+  const newClients: Metric = newClientsResult.error ? { status: "error" } : { status: "ok", value: newClientsResult.count ?? 0 };
+  const newPatients: Metric = newPatientsResult.error ? { status: "error" } : { status: "ok", value: newPatientsResult.count ?? 0 };
+  const upcomingSurgeries: Metric = surgeriesResult.error ? { status: "error" } : { status: "ok", value: surgeriesResult.count ?? 0 };
+  const doctorsOnDutyToday: Metric = availabilityResult.error
+    ? { status: "error" }
+    : { status: "ok", value: new Set((availabilityResult.data ?? []).map((row) => row.doctor_id)).size };
+
+  return { newClients, newPatients, upcomingSurgeries, doctorsOnDutyToday };
+}
+
 export type DoctorOverview = {
   clients: Metric;
   colleagues: Metric;

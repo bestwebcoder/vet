@@ -1,10 +1,24 @@
-import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users, Wallet, Worm } from "lucide-react";
+import {
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  PawPrint,
+  Receipt,
+  Scissors,
+  Stethoscope,
+  Syringe,
+  UserCog,
+  UserPlus,
+  Users,
+  Wallet,
+  Worm,
+} from "lucide-react";
 
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { countAppointments } from "@/features/appointments/queries";
-import { getAdminOverview, getAdminRevenue, getRecentActivity, type Metric } from "@/features/dashboard/queries";
+import { getAdminOperationalSummary, getAdminOverview, getAdminRevenue, getRecentActivity, type Metric } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
 import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
 import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
@@ -18,7 +32,7 @@ export default async function AdminDashboardPage() {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
 
-  const [overview, activity, appointmentsToday, vaccinationStatuses, dewormingStatuses, revenue] = await Promise.all([
+  const [overview, activity, appointmentsToday, vaccinationStatuses, dewormingStatuses, revenue, operational] = await Promise.all([
     getAdminOverview(),
     getRecentActivity(),
     countAppointments({
@@ -29,6 +43,7 @@ export default async function AdminDashboardPage() {
     listPracticeVaccinationStatuses(),
     listPracticeDewormingStatuses(),
     getAdminRevenue(),
+    getAdminOperationalSummary(),
   ]);
 
   const vaccinationsDueToday: Metric =
@@ -110,6 +125,32 @@ export default async function AdminDashboardPage() {
             metric={overview.clients}
             href="/admin/clients"
             icon={Users}
+          />
+          <AttentionCard
+            label="New clients"
+            metric={operational.newClients}
+            href="/admin/clients"
+            icon={UserPlus}
+            description="Last 7 days"
+          />
+          <AttentionCard
+            label="New patients"
+            metric={operational.newPatients}
+            href="/admin/patients"
+            icon={PawPrint}
+            description="Last 7 days"
+          />
+          <AttentionCard
+            label="Upcoming surgeries"
+            metric={operational.upcomingSurgeries}
+            href="/admin/appointments"
+            icon={Scissors}
+          />
+          <AttentionCard
+            label="Doctors on duty today"
+            metric={operational.doctorsOnDutyToday}
+            href="/admin/appointments/availability"
+            icon={CalendarCheck}
           />
         </div>
       </section>

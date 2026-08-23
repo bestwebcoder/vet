@@ -19,13 +19,14 @@ export type DoctorSummary = {
   signatureUrl: string | null;
   isAcceptingAppointments: boolean;
   canManageBilling: boolean;
+  canViewReports: boolean;
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 const DOCTOR_COLUMNS = `
   id, user_id, organization_id, specialization, registration_number, signature_url,
-  is_accepting_appointments, can_manage_billing,
+  is_accepting_appointments, can_manage_billing, can_view_reports,
   user:user_id (full_name)
 `;
 
@@ -46,6 +47,7 @@ function toSummary(row: any): DoctorSummary {
     signatureUrl: row.signature_url,
     isAcceptingAppointments: row.is_accepting_appointments,
     canManageBilling: row.can_manage_billing,
+    canViewReports: row.can_view_reports,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

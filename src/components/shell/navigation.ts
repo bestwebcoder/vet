@@ -61,6 +61,11 @@ export const DOCTOR_NAV: NavItem[] = [
   { label: "Deworming", href: "/doctor/deworming", icon: Worm },
   { label: "Diagnostics", href: "/doctor/diagnostics", icon: FlaskConical },
   { label: "Follow-ups", href: "/doctor/follow-ups", icon: Stethoscope },
+  // Not in CLAUDE.md §8's literal list — added because §8.6 explicitly
+  // anticipates a permitted doctor reaching reports, and unlike billing
+  // (reached from an appointment) reports have no natural entry point
+  // otherwise. The page itself still gates on can_view_reports.
+  { label: "Reports", href: "/doctor/reports", icon: FileText },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -76,7 +81,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Payments", href: "/admin/payments", icon: Wallet },
   { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe },
   { label: "Deworming", href: "/admin/deworming", icon: Worm },
-  { label: "Reports", href: "/admin/reports", icon: FileText, phase: 8 },
+  { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Notifications", href: "/admin/notifications", icon: Bell, phase: 9 },
   { label: "Settings", href: "/admin/settings", icon: Settings, phase: 10 },
 ];
