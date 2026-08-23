@@ -136,7 +136,6 @@ describe("overview", () => {
 
 describe("unbuilt tabs", () => {
   it.each([
-    ["prescriptions", "Prescriptions"],
     ["vaccinations", "Vaccinations"],
     ["deworming", "Deworming"],
     ["billing", "Billing"],
@@ -155,11 +154,12 @@ describe("unbuilt tabs", () => {
   });
 });
 
-describe("built in Phase 4", () => {
+describe("built in Phases 4 and 5", () => {
   it.each([
     ["medical-history", "No diagnoses recorded yet"],
     ["visits", "No visits recorded yet"],
     ["diagnostics", "No diagnostic tests yet"],
+    ["prescriptions", "No prescriptions yet"],
   ])("%s shows real content instead of a coming-soon placeholder", async (slug, emptyStateText) => {
     const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
     const html = await response.text();

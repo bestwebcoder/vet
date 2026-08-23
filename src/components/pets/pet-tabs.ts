@@ -16,7 +16,7 @@ export const PET_TABS: PetTab[] = [
   { slug: "", label: "Overview" },
   { slug: "medical-history", label: "Medical History" },
   { slug: "visits", label: "Visit History" },
-  { slug: "prescriptions", label: "Prescriptions", phase: 5 },
+  { slug: "prescriptions", label: "Prescriptions" },
   { slug: "vaccinations", label: "Vaccinations", phase: 6 },
   { slug: "deworming", label: "Deworming", phase: 6 },
   { slug: "diagnostics", label: "Diagnostics" },

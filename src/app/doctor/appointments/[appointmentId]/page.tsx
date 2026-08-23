@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, FileText } from "lucide-react";
 
 import { AppointmentStatusBadge } from "@/components/appointments/status-badge";
 import { AppointmentStatusActions } from "@/components/appointments/status-actions";
@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getAppointment, listAppointmentStatuses } from "@/features/appointments/queries";
+import { getCurrentPrescription } from "@/features/prescriptions/queries";
 import { getCurrentSoapRecord } from "@/features/soap/queries";
 import { VISIT_TYPE_LABELS, type VisitType } from "@/lib/validation/appointment";
 
@@ -39,9 +40,10 @@ export default async function DoctorAppointmentDetailPage({
   if (!result.data) notFound();
 
   const appointment = result.data;
-  const [statuses, soapResult] = await Promise.all([
+  const [statuses, soapResult, prescriptionResult] = await Promise.all([
     listAppointmentStatuses(),
     getCurrentSoapRecord(appointmentId),
+    getCurrentPrescription(appointmentId),
   ]);
   const isFinal = ["completed", "cancelled", "no_show"].includes(appointment.status);
 
@@ -51,6 +53,14 @@ export default async function DoctorAppointmentDetailPage({
         ? "View SOAP record"
         : "Continue SOAP draft"
       : "Start SOAP record";
+
+  const hasFinalizedSoap = soapResult.status === "ok" && soapResult.data?.status === "finalized";
+  const prescriptionLabel =
+    prescriptionResult.status === "ok" && prescriptionResult.data
+      ? prescriptionResult.data.status === "finalized"
+        ? "View prescription"
+        : "Continue prescription draft"
+      : "Start prescription";
 
   const details: { label: string; value: string }[] = [
     { label: "Client", value: `${appointment.clientName} · ${appointment.clientPhone}` },
@@ -112,6 +122,15 @@ export default async function DoctorAppointmentDetailPage({
           <ClipboardList aria-hidden />
           {soapLabel}
         </Link>
+        {hasFinalizedSoap ? (
+          <Link
+            href={`/doctor/appointments/${appointment.id}/prescription`}
+            className={buttonVariants({ variant: "outline", size: "touch" })}
+          >
+            <FileText aria-hidden />
+            {prescriptionLabel}
+          </Link>
+        ) : null}
       </div>
 
       {!isFinal ? (

@@ -172,6 +172,10 @@ export function describeAction(action: string): string {
     "diagnostics.update": "Diagnostic test updated",
     "documents.insert": "Document uploaded",
     "documents.update": "Document updated",
+    "prescriptions.insert": "Prescription started",
+    "prescriptions.update": "Prescription updated",
+    "prescription_items.insert": "Prescription item added",
+    "prescription_items.update": "Prescription item updated",
   };
 
   return readable[action] ?? action;

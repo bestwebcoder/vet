@@ -15,13 +15,15 @@ export type DoctorSummary = {
   userId: string;
   fullName: string;
   specialization: string | null;
+  registrationNumber: string | null;
+  signatureUrl: string | null;
   isAcceptingAppointments: boolean;
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 const DOCTOR_COLUMNS = `
-  id, user_id, organization_id, specialization, is_accepting_appointments,
+  id, user_id, organization_id, specialization, registration_number, signature_url, is_accepting_appointments,
   user:user_id (full_name)
 `;
 
@@ -38,6 +40,8 @@ function toSummary(row: any): DoctorSummary {
     userId: row.user_id,
     fullName: one(row.user)?.full_name ?? "Unknown doctor",
     specialization: row.specialization,
+    registrationNumber: row.registration_number,
+    signatureUrl: row.signature_url,
     isAcceptingAppointments: row.is_accepting_appointments,
   };
 }
