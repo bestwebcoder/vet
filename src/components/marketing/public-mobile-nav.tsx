@@ -1,0 +1,58 @@
+"use client";
+
+import { useState } from "react";
+import { Menu } from "lucide-react";
+import Link from "next/link";
+
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
+
+const LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/about", label: "About Us" },
+  { href: "/doctors", label: "Doctors" },
+  { href: "/contact", label: "Contact Us" },
+];
+
+export function PublicMobileNav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        render={
+          <Button variant="ghost" size="icon-lg" aria-label="Open menu" className="lg:hidden">
+            <Menu />
+          </Button>
+        }
+      />
+      <SheetContent side="left" className="w-72 p-0">
+        <SheetHeader className="border-b">
+          <SheetTitle>TV Care</SheetTitle>
+          <SheetDescription>The Traveling Vet</SheetDescription>
+        </SheetHeader>
+        <nav className="grid gap-1 p-3">
+          {LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={() => setOpen(false)}
+              className="hover:bg-muted flex min-h-11 items-center rounded-lg px-3 text-sm font-medium"
+            >
+              {link.label}
+            </Link>
+          ))}
+          <div className="mt-3 grid gap-2 border-t pt-3">
+            <Link href="/login" onClick={() => setOpen(false)} className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full")}>
+              Sign in
+            </Link>
+            <Link href="/register" onClick={() => setOpen(false)} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
+              Get started
+            </Link>
+          </div>
+        </nav>
+      </SheetContent>
+    </Sheet>
+  );
+}

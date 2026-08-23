@@ -1,5 +1,6 @@
 import { getSessionUser } from "@/features/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * Doctor reads — booking/calendar summaries, and (Phase 10) the fuller
@@ -144,4 +145,48 @@ export async function listDoctorsForAdmin(includeInactive = false): Promise<Resu
   }
 
   return { status: "ok", data: (data ?? []).map(toSummary) };
+}
+
+export type PublicDoctor = {
+  id: string;
+  fullName: string;
+  specialization: string | null;
+  qualifications: string | null;
+  bio: string | null;
+};
+
+/**
+ * The public Doctors page — reached before any session exists, so it goes
+ * through the service role like every other public read. Real doctors,
+ * not placeholder names (CLAUDE.md forbids hardcoding them); only the
+ * fields a practice would put on its own website — never contact details
+ * or anything clinical.
+ */
+export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("doctors")
+    .select("id, specialization, qualifications, bio, user:user_id (full_name)")
+    .is("deleted_at", null)
+    .order("id");
+
+  if (error) {
+    console.error("[doctors] public list failed", error);
+    return { status: "error" };
+  }
+
+  return {
+    status: "ok",
+    data: (data ?? []).map((row) => {
+      const user = Array.isArray(row.user) ? row.user[0] : row.user;
+      return {
+        id: row.id,
+        fullName: user?.full_name ?? "Unknown doctor",
+        specialization: row.specialization,
+        qualifications: row.qualifications,
+        bio: row.bio,
+      };
+    }),
+  };
 }

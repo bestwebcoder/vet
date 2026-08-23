@@ -41,11 +41,20 @@ beforeAll(async () => {
 }, 120_000);
 
 describe("signed out", () => {
-  it.each(["/", "/client", "/doctor", "/admin"])("sends %s to sign in", async (path) => {
+  it.each(["/client", "/doctor", "/admin"])("sends %s to sign in", async (path) => {
     const response = await new Session().get(path);
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain("/login");
+  });
+
+  // / is the public front page now, not a login gate — a signed-out
+  // visitor sees marketing content instead of a redirect.
+  it("shows the public front page at /, not a redirect", async () => {
+    const response = await new Session().get("/");
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Create an account");
   });
 });
 

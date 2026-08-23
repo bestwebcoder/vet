@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { HeroImageForm } from "@/components/organizations/hero-image-form";
 import { SettingsForm } from "@/components/organizations/settings-form";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +38,10 @@ export default async function AdminSettingsPage() {
           </CardContent>
         </Card>
       ) : (
-        <SettingsForm organization={organization.data} />
+        <>
+          <SettingsForm organization={organization.data} />
+          <HeroImageForm heroImageUrl={organization.data.heroImageUrl} />
+        </>
       )}
     </div>
   );

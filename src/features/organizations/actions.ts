@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
+import { describeHeroImageProblem, readHeroImage, uploadHeroImage } from "@/features/organizations/hero-image";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { optionalText, optionalTime } from "@/lib/validation/common";
@@ -110,4 +111,40 @@ export async function updateOrganizationSettingsAction(_previous: FormState, for
 
   revalidatePath("/admin/settings");
   return { status: "success", message: "Settings saved." };
+}
+
+/** The public front page's hero image — the one image an admin controls (see the site-images bucket). */
+export async function updateHeroImageAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const file = readHeroImage(formData);
+  if (!file) {
+    return { status: "error", message: "Choose an image to upload.", fieldErrors: { heroImage: ["Required"] } };
+  }
+
+  const problem = describeHeroImageProblem(file);
+  if (problem) {
+    return { status: "error", message: problem, fieldErrors: { heroImage: [problem] } };
+  }
+
+  const uploaded = await uploadHeroImage(organizationId, file);
+  if (!uploaded.ok) {
+    return { status: "error", message: "We could not upload that image. Please try again." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ hero_image_path: uploaded.path })
+    .eq("id", organizationId);
+
+  if (error) {
+    return failure("organizations", error, "We could not save the hero image just now. Please try again.");
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  return { status: "success", message: "Hero image updated." };
 }

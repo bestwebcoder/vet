@@ -11,6 +11,8 @@ import {
   Syringe,
 } from "lucide-react";
 
+import { PublicFooter } from "@/components/marketing/public-footer";
+import { PublicHeader } from "@/components/marketing/public-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicOrganizationInfo } from "@/features/organizations/queries";
@@ -73,42 +75,48 @@ export function FrontPage({ organization }: { organization: PublicOrganizationIn
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="border-border/60 border-b">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <div>
-            <p className="text-lg font-semibold tracking-tight">TV Care</p>
-            <p className="text-muted-foreground text-xs">{practiceName}</p>
-          </div>
-          <nav className="flex items-center gap-2">
-            <Link href="/login" className={buttonVariants({ variant: "ghost", size: "touch" })}>
-              Sign in
-            </Link>
-            <Link href="/register" className={buttonVariants({ size: "touch" })}>
-              Get started
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <PublicHeader practiceName={practiceName} />
 
       <main className="flex-1">
         {/* Hero */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 sm:py-24">
-          <div className="mx-auto grid max-w-2xl gap-6 text-center">
-            <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-              Veterinary care for your pet, organized in one place
-            </h1>
-            <p className="text-muted-foreground text-lg text-balance">
-              Book appointments, keep track of vaccinations, and see your pet&rsquo;s full medical history —
-              all from one account with {practiceName}.
-            </p>
-            <div className="mt-2 flex flex-col justify-center gap-3 sm:flex-row">
-              <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
-                Create an account
-              </Link>
-              <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}>
-                Sign in
-              </Link>
+          <div
+            className={cn(
+              "mx-auto grid items-center gap-10",
+              organization?.heroImageUrl ? "max-w-5xl lg:grid-cols-2 lg:text-left" : "max-w-2xl text-center",
+            )}
+          >
+            <div className={cn("grid gap-6", organization?.heroImageUrl ? "text-center lg:text-left" : "text-center")}>
+              <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+                Veterinary care for your pet, organized in one place
+              </h1>
+              <p className="text-muted-foreground text-lg text-balance">
+                Book appointments, keep track of vaccinations, and see your pet&rsquo;s full medical history —
+                all from one account with {practiceName}.
+              </p>
+              <div
+                className={cn(
+                  "mt-2 flex flex-col gap-3 sm:flex-row",
+                  organization?.heroImageUrl ? "justify-center lg:justify-start" : "justify-center",
+                )}
+              >
+                <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
+                  Create an account
+                </Link>
+                <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}>
+                  Sign in
+                </Link>
+              </div>
             </div>
+
+            {organization?.heroImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- an admin-uploaded, arbitrary-dimension public image; no build-time optimization to gain here.
+              <img
+                src={organization.heroImageUrl}
+                alt=""
+                className="aspect-4/3 w-full rounded-2xl object-cover shadow-sm"
+              />
+            ) : null}
           </div>
         </section>
 
@@ -181,19 +189,7 @@ export function FrontPage({ organization }: { organization: PublicOrganizationIn
         </section>
       </main>
 
-      <footer className="border-border/60 border-t">
-        <div className="text-muted-foreground mx-auto grid w-full max-w-6xl gap-1 px-4 py-8 text-sm sm:px-6">
-          <p className="text-foreground font-medium">{practiceName}</p>
-          {organization?.address || organization?.city ? (
-            <p>{[organization.address, organization.city].filter(Boolean).join(", ")}</p>
-          ) : null}
-          <p className="flex flex-wrap gap-x-4">
-            {organization?.phone ? <span>{organization.phone}</span> : null}
-            {organization?.email ? <span>{organization.email}</span> : null}
-          </p>
-          <p className="mt-4">© {new Date().getFullYear()} TV Care.</p>
-        </div>
-      </footer>
+      <PublicFooter organization={organization} />
     </div>
   );
 }

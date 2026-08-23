@@ -6,6 +6,7 @@ import {
   FileText,
   FlaskConical,
   Home,
+  MessageSquare,
   PawPrint,
   LayoutDashboard,
   Users,
@@ -81,6 +82,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Deworming", href: "/admin/deworming", icon: Worm },
   { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
+  { label: "Messages", href: "/admin/messages", icon: MessageSquare },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

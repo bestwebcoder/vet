@@ -1,7 +1,17 @@
+import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /** Organization reads — practice identity, billing and quiet-hours settings each own their own screen. */
+
+/**
+ * A public-bucket object's URL is a deterministic string, not a signed
+ * grant — no client/auth needed to build it, unlike every other storage
+ * path in this app (which all resolve through a signed URL instead).
+ */
+function heroImagePublicUrl(path: string): string {
+  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}`;
+}
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
@@ -19,11 +29,13 @@ export type Organization = {
   paymentInstructions: string | null;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
+  heroImagePath: string | null;
+  heroImageUrl: string | null;
 };
 
 const ORGANIZATION_COLUMNS = `
   id, name, legal_name, timezone, email, phone, address, city, country, is_active,
-  payment_instructions, quiet_hours_start, quiet_hours_end
+  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -42,6 +54,8 @@ function toOrganization(row: any): Organization {
     paymentInstructions: row.payment_instructions,
     quietHoursStart: row.quiet_hours_start,
     quietHoursEnd: row.quiet_hours_end,
+    heroImagePath: row.hero_image_path,
+    heroImageUrl: row.hero_image_path ? heroImagePublicUrl(row.hero_image_path) : null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -64,19 +78,21 @@ export async function getOwnOrganization(organizationId: string): Promise<Result
 }
 
 export type PublicOrganizationInfo = {
+  id: string;
   name: string;
   phone: string | null;
   email: string | null;
   address: string | null;
   city: string | null;
+  heroImageUrl: string | null;
 };
 
 /**
- * For the signed-out front page (src/app/page.tsx) — reached before any
- * session exists, so it goes through the service role rather than the
- * RLS-scoped client. Only business contact info, the same fields a real
- * clinic would put on its own website; never clinical or financial data.
- * Mirrors default_organization_id()'s "the" organization resolution
+ * For every signed-out public page — reached before any session exists, so
+ * it goes through the service role rather than the RLS-scoped client. Only
+ * business contact info and the hero image, the same things a real clinic
+ * would put on its own website; never clinical or financial data. Mirrors
+ * default_organization_id()'s "the" organization resolution
  * (20260820000300_signup.sql): earliest created, active, not deleted.
  */
 export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInfo | null> {
@@ -84,7 +100,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("name, phone, email, address, city")
+    .select("id, name, phone, email, address, city, hero_image_path")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -96,5 +112,15 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     return null;
   }
 
-  return data;
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    phone: data.phone,
+    email: data.email,
+    address: data.address,
+    city: data.city,
+    heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path) : null,
+  };
 }
