@@ -165,6 +165,13 @@ export function describeAction(action: string): string {
     "services.update": "Service updated",
     "doctor_availability.insert": "Availability window added",
     "doctor_availability.update": "Availability window updated",
+    "soap_records.insert": "SOAP record started",
+    "soap_records.update": "SOAP record updated",
+    "diagnoses.insert": "Diagnosis recorded",
+    "diagnostics.insert": "Diagnostic test ordered",
+    "diagnostics.update": "Diagnostic test updated",
+    "documents.insert": "Document uploaded",
+    "documents.update": "Document updated",
   };
 
   return readable[action] ?? action;

@@ -17,7 +17,7 @@ export default async function NewDoctorAppointmentPage({
   searchParams,
 }: PageProps<"/doctor/appointments/new">) {
   await requireRole("doctor");
-  const { petId } = await searchParams;
+  const { petId, visitType, reason, soapRecordId } = await searchParams;
 
   const pet = typeof petId === "string" ? await getPet(petId) : null;
 
@@ -62,6 +62,9 @@ export default async function NewDoctorAppointmentPage({
       <BookingForm
         pets={[{ id: pet.data.id, name: pet.data.name }]}
         fixedPet
+        defaultVisitType={typeof visitType === "string" ? visitType : undefined}
+        defaultReason={typeof reason === "string" ? reason : undefined}
+        sourceSoapRecordId={typeof soapRecordId === "string" ? soapRecordId : undefined}
         services={services.status === "ok" ? services.data.map((s) => ({ id: s.id, name: s.name, durationMinutes: s.durationMinutes })) : []}
         doctors={doctors.status === "ok" ? doctors.data.map((doctor) => ({ id: doctor.id, name: doctor.fullName })) : []}
         successHref="/doctor/appointments"

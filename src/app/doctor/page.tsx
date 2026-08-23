@@ -18,6 +18,7 @@ import { countAppointments } from "@/features/appointments/queries";
 import { getDoctorOverview, getRecentActivity } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
 import { getOwnDoctorRecord } from "@/features/doctors/queries";
+import { listDraftSoapRecordsForDoctor, listFollowUpsDueForDoctor } from "@/features/soap/queries";
 import { firstName } from "@/lib/names";
 import type { Metric } from "@/features/dashboard/queries";
 
@@ -35,6 +36,8 @@ export default async function DoctorDashboardPage() {
   let followUp: Metric = { status: "error" };
   let surgery: Metric = { status: "error" };
   let recentlySeen: Metric = { status: "error" };
+  let recordsToComplete: Metric = { status: "error" };
+  let followUpsDue: Metric = { status: "error" };
 
   if (doctor.status === "ok" && doctor.data) {
     const doctorId = doctor.data.id;
@@ -81,6 +84,16 @@ export default async function DoctorDashboardPage() {
         to: now.toISOString(),
       }),
     ]);
+
+    const [draftsResult, followUpsResult] = await Promise.all([
+      listDraftSoapRecordsForDoctor(doctorId),
+      listFollowUpsDueForDoctor(doctorId),
+    ]);
+
+    recordsToComplete =
+      draftsResult.status === "ok" ? { status: "ok", value: draftsResult.data.length } : { status: "error" };
+    followUpsDue =
+      followUpsResult.status === "ok" ? { status: "ok", value: followUpsResult.data.length } : { status: "error" };
   }
 
   return (
@@ -113,13 +126,13 @@ export default async function DoctorDashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <AttentionCard
             label="Records to complete"
-            metric={{ status: "pending", phase: 4 }}
+            metric={recordsToComplete}
             href="/doctor/soap"
             icon={ClipboardList}
           />
           <AttentionCard
             label="Follow-ups due"
-            metric={{ status: "pending", phase: 4 }}
+            metric={followUpsDue}
             href="/doctor/follow-ups"
             icon={History}
           />

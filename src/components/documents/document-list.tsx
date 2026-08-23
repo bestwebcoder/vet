@@ -2,6 +2,7 @@ import { FileText, ImageIcon } from "lucide-react";
 
 import { formatFileSize, signedDocumentUrl, type PetDocument } from "@/features/documents/queries";
 import { EmptyState } from "@/components/states/empty-state";
+import { DOCUMENT_TYPE_LABELS, type DocumentType } from "@/lib/validation/document";
 
 const DHAKA_DATE = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
@@ -69,6 +70,8 @@ export async function DocumentList({
                 {DHAKA_DATE.format(new Date(document.uploadedAt))} ·{" "}
                 {formatFileSize(document.sizeBytes)}
                 {document.uploadedByName ? ` · ${document.uploadedByName}` : ""}
+                {" · "}
+                {DOCUMENT_TYPE_LABELS[document.documentType as DocumentType] ?? document.documentType}
               </span>
 
               {showVisibility ? (

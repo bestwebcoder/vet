@@ -120,6 +120,18 @@ export async function createAppointmentAction(
     return failure("appointments", error, "We could not book this appointment just now. Please try again.");
   }
 
+  const sourceSoapRecordId = text(formData, "sourceSoapRecordId");
+  if (sourceSoapRecordId) {
+    const { error: followUpError } = await supabase
+      .from("soap_records")
+      .update({ follow_up_scheduled_at: new Date().toISOString() })
+      .eq("id", sourceSoapRecordId);
+
+    // The appointment is booked either way — a failure here only means the
+    // "Follow-ups due" card stays stale, not that anything was lost.
+    if (followUpError) console.error("[appointments] marking follow-up scheduled failed", followUpError);
+  }
+
   revalidateAll();
 
   return { status: "success", message: "Appointment requested. You will be notified once it is confirmed.", id: data.id };

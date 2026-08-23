@@ -136,12 +136,9 @@ describe("overview", () => {
 
 describe("unbuilt tabs", () => {
   it.each([
-    ["medical-history", "Medical History"],
-    ["visits", "Visit History"],
     ["prescriptions", "Prescriptions"],
     ["vaccinations", "Vaccinations"],
     ["deworming", "Deworming"],
-    ["diagnostics", "Diagnostics"],
     ["billing", "Billing"],
   ])("explains that %s is not available yet", async (slug, label) => {
     const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
@@ -155,6 +152,21 @@ describe("unbuilt tabs", () => {
     const response = await ownerSession.page(`/client/pets/${petId}/not-a-tab`);
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("built in Phase 4", () => {
+  it.each([
+    ["medical-history", "No diagnoses recorded yet"],
+    ["visits", "No visits recorded yet"],
+    ["diagnostics", "No diagnostic tests yet"],
+  ])("%s shows real content instead of a coming-soon placeholder", async (slug, emptyStateText) => {
+    const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).not.toContain("is not available yet");
+    expect(html).toContain(emptyStateText);
   });
 });
 

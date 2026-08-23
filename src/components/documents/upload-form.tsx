@@ -3,12 +3,14 @@
 import { useActionState, useEffect, useRef } from "react";
 
 import { FormAlert } from "@/components/form/form-alert";
+import { SelectField } from "@/components/form/select-field";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Field } from "@/components/form/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { uploadDocumentAction } from "@/features/documents/actions";
 import { idleState } from "@/lib/forms";
+import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from "@/lib/validation/document";
 
 export function DocumentUploadForm({ petId }: { petId: string }) {
   const [state, formAction] = useActionState(uploadDocumentAction, idleState);
@@ -43,6 +45,13 @@ export function DocumentUploadForm({ petId }: { petId: string }) {
         />
         <p className="text-muted-foreground text-sm">JPEG, PNG, WebP or PDF, up to 20 MB.</p>
       </div>
+
+      <SelectField
+        label="Type"
+        name="documentType"
+        options={DOCUMENT_TYPES.map((value) => ({ value, label: DOCUMENT_TYPE_LABELS[value] }))}
+        defaultValue="other"
+      />
 
       <Field
         label="Description"

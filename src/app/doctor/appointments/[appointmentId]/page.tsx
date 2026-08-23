@@ -3,13 +3,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ClipboardList } from "lucide-react";
+
 import { AppointmentStatusBadge } from "@/components/appointments/status-badge";
 import { AppointmentStatusActions } from "@/components/appointments/status-actions";
 import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
 import { ErrorState } from "@/components/states/error-state";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getAppointment, listAppointmentStatuses } from "@/features/appointments/queries";
+import { getCurrentSoapRecord } from "@/features/soap/queries";
 import { VISIT_TYPE_LABELS, type VisitType } from "@/lib/validation/appointment";
 
 export const metadata: Metadata = { title: "Appointment · TV Care" };
@@ -35,8 +39,18 @@ export default async function DoctorAppointmentDetailPage({
   if (!result.data) notFound();
 
   const appointment = result.data;
-  const statuses = await listAppointmentStatuses();
+  const [statuses, soapResult] = await Promise.all([
+    listAppointmentStatuses(),
+    getCurrentSoapRecord(appointmentId),
+  ]);
   const isFinal = ["completed", "cancelled", "no_show"].includes(appointment.status);
+
+  const soapLabel =
+    soapResult.status === "ok" && soapResult.data
+      ? soapResult.data.status === "finalized"
+        ? "View SOAP record"
+        : "Continue SOAP draft"
+      : "Start SOAP record";
 
   const details: { label: string; value: string }[] = [
     { label: "Client", value: `${appointment.clientName} · ${appointment.clientPhone}` },
@@ -89,6 +103,16 @@ export default async function DoctorAppointmentDetailPage({
           ) : null}
         </CardContent>
       </Card>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href={`/doctor/appointments/${appointment.id}/soap`}
+          className={buttonVariants({ variant: "outline", size: "touch" })}
+        >
+          <ClipboardList aria-hidden />
+          {soapLabel}
+        </Link>
+      </div>
 
       {!isFinal ? (
         <div className="grid gap-4">

@@ -12,6 +12,7 @@ export type PetDocument = {
   mimeType: string;
   sizeBytes: number;
   description: string | null;
+  documentType: string;
   isClientVisible: boolean;
   uploadedAt: string;
   uploadedByName: string | null;
@@ -25,7 +26,7 @@ export async function listDocuments(petId: string): Promise<Result<PetDocument[]
   const { data, error } = await supabase
     .from("documents")
     .select(
-      "id, file_name, storage_path, mime_type, size_bytes, description, is_client_visible, created_at, uploader:uploaded_by (full_name)",
+      "id, file_name, storage_path, mime_type, size_bytes, description, document_type, is_client_visible, created_at, uploader:uploaded_by (full_name)",
     )
     .eq("pet_id", petId)
     .is("deleted_at", null)
@@ -48,6 +49,7 @@ export async function listDocuments(petId: string): Promise<Result<PetDocument[]
         mimeType: row.mime_type,
         sizeBytes: row.size_bytes,
         description: row.description,
+        documentType: row.document_type,
         isClientVisible: row.is_client_visible,
         uploadedAt: row.created_at,
         uploadedByName: uploader?.full_name ?? null,

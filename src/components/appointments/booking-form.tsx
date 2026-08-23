@@ -28,6 +28,11 @@ type BookingFormProps = {
   fixedPet?: boolean;
   /** Pre-selects a pet within the "pet" step, e.g. arriving from that pet's own record. */
   defaultPetId?: string;
+  /** Pre-fills the visit type and reason steps, e.g. booking a follow-up from a SOAP record. */
+  defaultVisitType?: string;
+  defaultReason?: string;
+  /** When booking a follow-up from a SOAP record, marks it scheduled once this succeeds. */
+  sourceSoapRecordId?: string;
   services: ServiceOption[];
   doctors: Option[];
   successHref: string;
@@ -64,6 +69,9 @@ export function BookingForm({
   pets,
   fixedPet,
   defaultPetId,
+  defaultVisitType,
+  defaultReason,
+  sourceSoapRecordId,
   services,
   doctors,
   successHref,
@@ -80,10 +88,12 @@ export function BookingForm({
   );
   const [serviceId, setServiceId] = useState("");
   const [doctorId, setDoctorId] = useState("");
-  const [visitType, setVisitType] = useState("");
+  const [visitType, setVisitType] = useState(
+    defaultVisitType && VISIT_TYPES.includes(defaultVisitType as (typeof VISIT_TYPES)[number]) ? defaultVisitType : "",
+  );
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(defaultReason ?? "");
   const [location, setLocation] = useState("");
 
   const dateValue = date ? format(date, "yyyy-MM-dd") : "";
@@ -183,6 +193,9 @@ export function BookingForm({
           <input type="hidden" name="time" value={time} />
           <input type="hidden" name="reason" value={reason} />
           <input type="hidden" name="location" value={location} />
+          {sourceSoapRecordId ? (
+            <input type="hidden" name="sourceSoapRecordId" value={sourceSoapRecordId} />
+          ) : null}
 
           <div className="grid gap-2">
             <ol className="flex flex-wrap gap-1.5">

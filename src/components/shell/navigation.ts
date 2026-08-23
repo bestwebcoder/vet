@@ -41,7 +41,7 @@ export const CLIENT_NAV: NavItem[] = [
   { label: "Home", href: "/client", icon: Home },
   { label: "My Pets", href: "/client/pets", icon: PawPrint },
   { label: "Appointments", href: "/client/appointments", icon: CalendarDays },
-  { label: "Medical Records", href: "/client/records", icon: ClipboardList, phase: 4 },
+  { label: "Medical Records", href: "/client/records", icon: ClipboardList },
   { label: "Prescriptions", href: "/client/prescriptions", icon: FileText, phase: 5 },
   { label: "Vaccinations", href: "/client/vaccinations", icon: Syringe, phase: 6 },
   { label: "Deworming", href: "/client/deworming", icon: Worm, phase: 6 },
@@ -55,12 +55,12 @@ export const DOCTOR_NAV: NavItem[] = [
   { label: "Appointments", href: "/doctor/appointments", icon: CalendarDays },
   { label: "Patients", href: "/doctor/patients", icon: PawPrint },
   { label: "Calendar", href: "/doctor/calendar", icon: CalendarDays },
-  { label: "SOAP", href: "/doctor/soap", icon: ClipboardList, phase: 4 },
+  { label: "SOAP", href: "/doctor/soap", icon: ClipboardList },
   { label: "Prescriptions", href: "/doctor/prescriptions", icon: FileText, phase: 5 },
   { label: "Vaccinations", href: "/doctor/vaccinations", icon: Syringe, phase: 6 },
   { label: "Deworming", href: "/doctor/deworming", icon: Worm, phase: 6 },
-  { label: "Diagnostics", href: "/doctor/diagnostics", icon: FlaskConical, phase: 4 },
-  { label: "Follow-ups", href: "/doctor/follow-ups", icon: Stethoscope, phase: 4 },
+  { label: "Diagnostics", href: "/doctor/diagnostics", icon: FlaskConical },
+  { label: "Follow-ups", href: "/doctor/follow-ups", icon: Stethoscope },
 ];
 
 export const ADMIN_NAV: NavItem[] = [

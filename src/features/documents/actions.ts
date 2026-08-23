@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/features/auth/session";
 import { failure, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
+import { DOCUMENT_TYPES } from "@/lib/validation/document";
 
 /**
  * Document uploads.
@@ -87,6 +88,11 @@ export async function uploadDocumentAction(
   // requires it, and hiding someone's own file from them makes no sense.
   const isClientVisible = !user.roles.some((role) => role === "doctor" || role === "admin");
 
+  const requestedType = text(formData, "documentType");
+  const documentType = DOCUMENT_TYPES.includes(requestedType as (typeof DOCUMENT_TYPES)[number])
+    ? requestedType
+    : "other";
+
   const { error: insertError } = await supabase.from("documents").insert({
     pet_id: petId,
     organization_id: pet.organization_id,
@@ -95,6 +101,7 @@ export async function uploadDocumentAction(
     mime_type: file.type,
     size_bytes: file.size,
     description: text(formData, "description") ?? null,
+    document_type: documentType,
     is_client_visible: isClientVisible,
     uploaded_by: user.id,
   });
