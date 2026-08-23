@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, UserRound } from "lucide-react";
 
 import { DoctorEditForm } from "@/components/doctors/doctor-edit-form";
+import { DoctorPhotoForm } from "@/components/doctors/doctor-photo-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,6 +41,7 @@ function EditDoctorDialog({ doctor, branches }: { doctor: DoctorSummary; branche
         <DialogHeader>
           <DialogTitle>Edit {doctor.fullName}</DialogTitle>
         </DialogHeader>
+        <DoctorPhotoForm doctorId={doctor.id} photoUrl={doctor.photoUrl} />
         <DoctorEditForm doctor={doctor} branches={branches} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
@@ -59,12 +61,22 @@ export function DoctorList({
         <Card key={doctor.id} className={!doctor.isActive ? "opacity-70" : undefined}>
           <CardContent className="grid gap-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{doctor.fullName}</p>
-                <p className="text-muted-foreground text-sm">
-                  {doctor.email}
-                  {doctor.phone ? ` · ${doctor.phone}` : ""}
-                </p>
+              <div className="flex items-center gap-3">
+                {doctor.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- an arbitrary-dimension public image; no build-time optimization to gain here.
+                  <img src={doctor.photoUrl} alt="" className="size-11 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className="bg-secondary text-secondary-foreground flex size-11 shrink-0 items-center justify-center rounded-full">
+                    <UserRound className="size-5" aria-hidden />
+                  </span>
+                )}
+                <div>
+                  <p className="font-medium">{doctor.fullName}</p>
+                  <p className="text-muted-foreground text-sm">
+                    {doctor.email}
+                    {doctor.phone ? ` · ${doctor.phone}` : ""}
+                  </p>
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 {!doctor.isActive ? <Badge variant="destructive">Deactivated</Badge> : null}

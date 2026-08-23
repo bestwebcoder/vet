@@ -43,9 +43,14 @@ export default async function DoctorsPage() {
                 {doctorsResult.data.map((doctor) => (
                   <Card key={doctor.id}>
                     <CardContent className="grid gap-2">
-                      <span className="bg-secondary text-secondary-foreground flex size-11 items-center justify-center rounded-full">
-                        <Stethoscope className="size-5" aria-hidden />
-                      </span>
+                      {doctor.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- an arbitrary-dimension public image; no build-time optimization to gain here.
+                        <img src={doctor.photoUrl} alt="" className="size-16 rounded-full object-cover" />
+                      ) : (
+                        <span className="bg-secondary text-secondary-foreground flex size-16 items-center justify-center rounded-full">
+                          <Stethoscope className="size-6" aria-hidden />
+                        </span>
+                      )}
                       <p className="font-medium">{doctor.fullName}</p>
                       {doctor.specialization ? (
                         <p className="text-muted-foreground text-sm">{doctor.specialization}</p>

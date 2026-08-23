@@ -1,4 +1,5 @@
 import { getSessionUser } from "@/features/auth/session";
+import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -6,6 +7,15 @@ import { createServiceClient } from "@/lib/supabase/service";
  * Doctor reads — booking/calendar summaries, and (Phase 10) the fuller
  * profile the admin doctor-management screen needs.
  */
+
+/**
+ * A public-bucket object's URL is a deterministic string, not a signed
+ * grant — no client/auth needed to build it. Same shape as
+ * heroImagePublicUrl in src/features/organizations/queries.ts.
+ */
+function doctorPhotoPublicUrl(path: string): string {
+  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/doctor-photos/${path}`;
+}
 
 export type DoctorSummary = {
   id: string;
@@ -19,6 +29,8 @@ export type DoctorSummary = {
   bio: string | null;
   primaryBranchId: string | null;
   signatureUrl: string | null;
+  photoPath: string | null;
+  photoUrl: string | null;
   isAcceptingAppointments: boolean;
   isActive: boolean;
   canManageBilling: boolean;
@@ -29,7 +41,7 @@ export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 const DOCTOR_COLUMNS = `
   id, user_id, organization_id, primary_branch_id, specialization, registration_number,
-  qualifications, bio, signature_url,
+  qualifications, bio, signature_url, photo_path,
   is_accepting_appointments, deleted_at, can_manage_billing, can_view_reports,
   user:user_id (full_name, email, phone)
 `;
@@ -55,6 +67,8 @@ function toSummary(row: any): DoctorSummary {
     bio: row.bio,
     primaryBranchId: row.primary_branch_id,
     signatureUrl: row.signature_url,
+    photoPath: row.photo_path,
+    photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path) : null,
     isAcceptingAppointments: row.is_accepting_appointments,
     isActive: row.deleted_at === null,
     canManageBilling: row.can_manage_billing,
@@ -153,6 +167,7 @@ export type PublicDoctor = {
   specialization: string | null;
   qualifications: string | null;
   bio: string | null;
+  photoUrl: string | null;
 };
 
 /**
@@ -160,14 +175,15 @@ export type PublicDoctor = {
  * through the service role like every other public read. Real doctors,
  * not placeholder names (CLAUDE.md forbids hardcoding them); only the
  * fields a practice would put on its own website — never contact details
- * or anything clinical.
+ * or anything clinical. The photo is optional — admin-uploaded from
+ * /admin/doctors — and falls back to an icon avatar when not set.
  */
 export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
   const supabase = createServiceClient();
 
   const { data, error } = await supabase
     .from("doctors")
-    .select("id, specialization, qualifications, bio, user:user_id (full_name)")
+    .select("id, specialization, qualifications, bio, photo_path, user:user_id (full_name)")
     .is("deleted_at", null)
     .order("id");
 
@@ -186,6 +202,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
         specialization: row.specialization,
         qualifications: row.qualifications,
         bio: row.bio,
+        photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path) : null,
       };
     }),
   };

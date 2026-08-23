@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
 import { getOwnDoctorRecord } from "@/features/doctors/queries";
+import { describeDoctorPhotoProblem, readDoctorPhoto, uploadDoctorPhoto } from "@/features/doctors/photo";
 import { describeSignatureProblem, readSignature, uploadDoctorSignature } from "@/features/doctors/signature";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
@@ -203,4 +204,38 @@ export async function reactivateDoctorAction(_previous: FormState, formData: For
 
   revalidatePath("/admin/doctors");
   return { status: "success", message: "Doctor reactivated." };
+}
+
+/** Admin uploads a doctor's photo — shown on /admin/doctors and the public Doctors page. */
+export async function updateDoctorPhotoAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin");
+
+  const doctorId = text(formData, "doctorId");
+  if (!doctorId) return { status: "error", message: "We could not tell which doctor this is for." };
+
+  const file = readDoctorPhoto(formData);
+  if (!file) {
+    return { status: "error", message: "Choose an image to upload.", fieldErrors: { photo: ["Required"] } };
+  }
+
+  const problem = describeDoctorPhotoProblem(file);
+  if (problem) {
+    return { status: "error", message: problem, fieldErrors: { photo: [problem] } };
+  }
+
+  const uploaded = await uploadDoctorPhoto(doctorId, file);
+  if (!uploaded.ok) {
+    return { status: "error", message: "We could not upload that image. Please try again." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("doctors").update({ photo_path: uploaded.path }).eq("id", doctorId);
+
+  if (error) {
+    return failure("doctors", error, "We could not save that photo just now. Please try again.");
+  }
+
+  revalidatePath("/admin/doctors");
+  revalidatePath("/doctors");
+  return { status: "success", message: "Photo updated." };
 }
