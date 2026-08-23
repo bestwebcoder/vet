@@ -138,14 +138,26 @@ export type PetDueDeworming = {
 };
 
 /**
- * Every pet's current deworming status, practice-wide — the doctor/admin
- * worklists. Pet names are resolved separately: a plain view carries no
- * foreign key metadata for PostgREST to embed through.
+ * Every pet due or overdue (within 30 days — the widest window any
+ * worklist actually filters to; see src/lib/due-window.ts) for its next
+ * deworming, practice-wide — the doctor/admin worklists. Pushed down into
+ * the query itself: without this, the view returns one row per pet the
+ * practice has EVER dewormed, unbounded, most of it immediately discarded
+ * by every caller's own due-status filter. Pet names are resolved
+ * separately: a plain view carries no foreign key metadata for PostgREST
+ * to embed through.
  */
 export async function listPracticeDewormingStatuses(): Promise<Result<PetDueDeworming[]>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("pet_deworming_status").select("pet_id, product, next_due_date");
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 30);
+
+  const { data, error } = await supabase
+    .from("pet_deworming_status")
+    .select("pet_id, product, next_due_date")
+    .not("next_due_date", "is", null)
+    .lte("next_due_date", cutoff.toISOString().slice(0, 10));
 
   if (error) {
     console.error("[deworming] practice status list failed", error);

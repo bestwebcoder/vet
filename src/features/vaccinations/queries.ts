@@ -140,14 +140,26 @@ export type PetDueVaccination = {
 };
 
 /**
- * Every pet's current vaccination status, practice-wide — the doctor/admin
- * worklists. A plain view carries no foreign key metadata for PostgREST to
- * embed through, so pet names are resolved in a second query and merged here.
+ * Every pet due or overdue (within 30 days — the widest window any
+ * worklist actually filters to; see src/lib/due-window.ts) for its next
+ * vaccination, practice-wide — the doctor/admin worklists. Pushed down into
+ * the query itself: without this, the view returns one row per pet the
+ * practice has EVER vaccinated, unbounded, most of it immediately
+ * discarded by every caller's own due-status filter. A plain view carries
+ * no foreign key metadata for PostgREST to embed through, so pet names are
+ * resolved in a second query and merged here.
  */
 export async function listPracticeVaccinationStatuses(): Promise<Result<PetDueVaccination[]>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.from("pet_vaccination_status").select("pet_id, vaccine_name, next_due_date");
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 30);
+
+  const { data, error } = await supabase
+    .from("pet_vaccination_status")
+    .select("pet_id, vaccine_name, next_due_date")
+    .not("next_due_date", "is", null)
+    .lte("next_due_date", cutoff.toISOString().slice(0, 10));
 
   if (error) {
     console.error("[vaccinations] practice status list failed", error);

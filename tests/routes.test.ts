@@ -101,13 +101,15 @@ describe("no role reaches another role's area", () => {
 });
 
 describe("unbuilt navigation items", () => {
-  it("answers a known navigation item with a coming-soon page", async () => {
-    // Settings, not client/doctor screens: every client and doctor nav item
-    // is built as of Phase 9. Only ADMIN_NAV still has a Phase 10 entry.
-    const response = await adminSession.get("/admin/settings");
-
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("not available yet");
+  it("has no unbuilt navigation items left in any area — Phase 10 was the last one", async () => {
+    for (const [area, session] of [
+      ["/client", clientSession],
+      ["/doctor", doctorSession],
+      ["/admin", adminSession],
+    ] as const) {
+      const html = await (await session.page(area)).text();
+      expect(html, `${area} nav still shows a Soon badge`).not.toContain("Soon");
+    }
   });
 
   it("still returns 404 for a path that is not a navigation item", async () => {

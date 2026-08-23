@@ -73,9 +73,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Appointments", href: "/admin/appointments", icon: CalendarDays },
   { label: "Clients", href: "/admin/clients", icon: Users },
   { label: "Patients", href: "/admin/patients", icon: PawPrint },
-  // Not in any earlier phase's scope: managing doctors appears only in the
-  // admin workflow of CLAUDE.md §12, which Phase 10 must satisfy.
-  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, phase: 10 },
+  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope },
   { label: "Services", href: "/admin/services", icon: ClipboardList },
   { label: "Billing", href: "/admin/billing", icon: CreditCard },
   { label: "Payments", href: "/admin/payments", icon: Wallet },
@@ -83,7 +81,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Deworming", href: "/admin/deworming", icon: Worm },
   { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
-  { label: "Settings", href: "/admin/settings", icon: Settings, phase: 10 },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 
 export type Area = {
