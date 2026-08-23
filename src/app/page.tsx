@@ -1,20 +1,29 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { FrontPage } from "@/components/marketing/front-page";
 import { EmptyState } from "@/components/states/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
-import { homeHrefFor, requireUser } from "@/features/auth/session";
+import { getPublicOrganizationInfo } from "@/features/organizations/queries";
+import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 
 export const metadata: Metadata = { title: "TV Care" };
 
 /**
- * Sends each person to their own area. Someone holding several roles lands on
- * the most privileged one; the others stay reachable by URL.
+ * Signed in: sends each person to their own area (someone holding several
+ * roles lands on the most privileged one; the others stay reachable by
+ * URL). Signed out: the public front page, not a login redirect.
  */
 export default async function RootPage() {
-  const user = await requireUser();
+  const user = await getSessionUser();
+
+  if (!user) {
+    const organization = await getPublicOrganizationInfo();
+    return <FrontPage organization={organization} />;
+  }
+
   const home = homeHrefFor(user);
 
   if (home) {
