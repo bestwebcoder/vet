@@ -21,7 +21,7 @@ export const PET_TABS: PetTab[] = [
   { slug: "deworming", label: "Deworming" },
   { slug: "diagnostics", label: "Diagnostics" },
   { slug: "documents", label: "Documents" },
-  { slug: "billing", label: "Billing", phase: 7 },
+  { slug: "billing", label: "Billing" },
 ];
 
 export function petTabHref(basePath: string, slug: string) {

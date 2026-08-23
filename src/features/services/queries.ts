@@ -1,10 +1,9 @@
+import { formatCurrency } from "@/lib/currency";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * Service reads.
- *
- * Minimal by design: full pricing and service management is Phase 7. This is
- * only what booking needs — which services exist and how long they take.
+ * Service reads. Booking only ever needed name/duration (Phase 3); Phase 7
+ * adds pricing and category so the same table now also drives billing.
  */
 
 export type ServiceSummary = {
@@ -12,16 +11,59 @@ export type ServiceSummary = {
   name: string;
   description: string | null;
   durationMinutes: number;
+  categoryId: string | null;
+  categoryName: string | null;
+  pricePaisa: number;
+  price: string;
+  taxRatePercent: number;
+  isHomeVisitAvailable: boolean;
+  isHomeVisitFee: boolean;
+  requiresDoctor: boolean;
+  isActive: boolean;
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
+const SERVICE_COLUMNS = `
+  id, name, description, duration_minutes, category_id, price_paisa, tax_rate_percent,
+  is_home_visit_available, is_home_visit_fee, requires_doctor, is_active,
+  category:category_id (name)
+`;
+
+type Related = { name: string } | { name: string }[] | null;
+function one(value: Related) {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
+function toSummary(row: any): ServiceSummary {
+  const category = one(row.category);
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    durationMinutes: row.duration_minutes,
+    categoryId: row.category_id,
+    categoryName: category?.name ?? null,
+    pricePaisa: row.price_paisa,
+    price: formatCurrency(row.price_paisa),
+    taxRatePercent: Number(row.tax_rate_percent),
+    isHomeVisitAvailable: row.is_home_visit_available,
+    isHomeVisitFee: row.is_home_visit_fee,
+    requiresDoctor: row.requires_doctor,
+    isActive: row.is_active,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Active services only — what booking and invoice item pickers offer. */
 export async function listServices(): Promise<Result<ServiceSummary[]>> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, description, duration_minutes")
+    .select(SERVICE_COLUMNS)
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("sort_order");
@@ -31,15 +73,25 @@ export async function listServices(): Promise<Result<ServiceSummary[]>> {
     return { status: "error" };
   }
 
-  return {
-    status: "ok",
-    data: (data ?? []).map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      durationMinutes: row.duration_minutes,
-    })),
-  };
+  return { status: "ok", data: (data ?? []).map(toSummary) };
+}
+
+/** Every service, active or not — the admin catalog management screen. */
+export async function listAllServices(): Promise<Result<ServiceSummary[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("services")
+    .select(SERVICE_COLUMNS)
+    .is("deleted_at", null)
+    .order("sort_order");
+
+  if (error) {
+    console.error("[services] list failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (data ?? []).map(toSummary) };
 }
 
 export async function getService(serviceId: string): Promise<Result<ServiceSummary | null>> {
@@ -47,7 +99,7 @@ export async function getService(serviceId: string): Promise<Result<ServiceSumma
 
   const { data, error } = await supabase
     .from("services")
-    .select("id, name, description, duration_minutes")
+    .select(SERVICE_COLUMNS)
     .eq("id", serviceId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -57,15 +109,25 @@ export async function getService(serviceId: string): Promise<Result<ServiceSumma
     return { status: "error" };
   }
 
-  return {
-    status: "ok",
-    data: data
-      ? {
-          id: data.id,
-          name: data.name,
-          description: data.description,
-          durationMinutes: data.duration_minutes,
-        }
-      : null,
-  };
+  return { status: "ok", data: data ? toSummary(data) : null };
+}
+
+/** The configured home-visit fee, if an admin has marked one — §7.3. */
+export async function getHomeVisitFeeService(): Promise<Result<ServiceSummary | null>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("services")
+    .select(SERVICE_COLUMNS)
+    .eq("is_home_visit_fee", true)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[services] home visit fee lookup failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: data ? toSummary(data) : null };
 }

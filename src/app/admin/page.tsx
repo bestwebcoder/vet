@@ -1,13 +1,14 @@
-import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users, Worm } from "lucide-react";
+import { Building2, CalendarDays, Receipt, Stethoscope, Syringe, UserCog, Users, Wallet, Worm } from "lucide-react";
 
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { countAppointments } from "@/features/appointments/queries";
-import { getAdminOverview, getRecentActivity, type Metric } from "@/features/dashboard/queries";
+import { getAdminOverview, getAdminRevenue, getRecentActivity, type Metric } from "@/features/dashboard/queries";
 import { requireRole } from "@/features/auth/session";
 import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
 import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
+import { formatCurrency } from "@/lib/currency";
 import { getDueInfo } from "@/lib/due-window";
 
 export default async function AdminDashboardPage() {
@@ -17,7 +18,7 @@ export default async function AdminDashboardPage() {
   startOfToday.setHours(0, 0, 0, 0);
   const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
 
-  const [overview, activity, appointmentsToday, vaccinationStatuses, dewormingStatuses] = await Promise.all([
+  const [overview, activity, appointmentsToday, vaccinationStatuses, dewormingStatuses, revenue] = await Promise.all([
     getAdminOverview(),
     getRecentActivity(),
     countAppointments({
@@ -27,6 +28,7 @@ export default async function AdminDashboardPage() {
     }),
     listPracticeVaccinationStatuses(),
     listPracticeDewormingStatuses(),
+    getAdminRevenue(),
   ]);
 
   const vaccinationsDueToday: Metric =
@@ -66,9 +68,30 @@ export default async function AdminDashboardPage() {
           />
           <AttentionCard
             label="Unpaid invoices"
-            metric={{ status: "pending", phase: 7 }}
+            metric={revenue.unpaidInvoices}
             href="/admin/billing"
             icon={Receipt}
+          />
+          <AttentionCard
+            label="Today's revenue"
+            metric={revenue.todayRevenuePaisa}
+            href="/admin/payments"
+            icon={Wallet}
+            formatValue={(value) => formatCurrency(value)}
+          />
+          <AttentionCard
+            label="This month's revenue"
+            metric={revenue.monthRevenuePaisa}
+            href="/admin/payments"
+            icon={Wallet}
+            formatValue={(value) => formatCurrency(value)}
+          />
+          <AttentionCard
+            label="Outstanding balance"
+            metric={revenue.outstandingBalancePaisa}
+            href="/admin/billing"
+            icon={Receipt}
+            formatValue={(value) => formatCurrency(value)}
           />
           <AttentionCard
             label="Vaccinations due today"

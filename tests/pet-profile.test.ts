@@ -134,23 +134,13 @@ describe("overview", () => {
   });
 });
 
-describe("unbuilt tabs", () => {
-  it.each([["billing", "Billing"]])("explains that %s is not available yet", async (slug, label) => {
-    const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
-    const html = await response.text();
-
-    expect(response.status).toBe(200);
-    expect(html).toContain(`${label} is not available yet`);
-  });
-
+describe("every tab is built as of Phase 7", () => {
   it("still returns 404 for something that is not a tab", async () => {
     const response = await ownerSession.page(`/client/pets/${petId}/not-a-tab`);
 
     expect(response.status).toBe(404);
   });
-});
 
-describe("built in Phases 4, 5 and 6", () => {
   it.each([
     ["medical-history", "No diagnoses recorded yet"],
     ["visits", "No visits recorded yet"],
@@ -158,6 +148,7 @@ describe("built in Phases 4, 5 and 6", () => {
     ["prescriptions", "No prescriptions yet"],
     ["vaccinations", "No vaccinations recorded yet"],
     ["deworming", "No deworming recorded yet"],
+    ["billing", "No invoices yet"],
   ])("%s shows real content instead of a coming-soon placeholder", async (slug, emptyStateText) => {
     const response = await ownerSession.page(`/client/pets/${petId}/${slug}`);
     const html = await response.text();

@@ -13,6 +13,8 @@ type AttentionCardProps = {
   /** What the number means, in the reader's terms. */
   description?: string;
   actionLabel?: string;
+  /** Renders the raw figure for reading — e.g. currency formatting. Defaults to the plain number. */
+  formatValue?: (value: number) => string;
 };
 
 /**
@@ -29,6 +31,7 @@ export function AttentionCard({
   icon: Icon,
   description,
   actionLabel = "View",
+  formatValue = String,
 }: AttentionCardProps) {
   const isPending = metric.status === "pending";
 
@@ -48,7 +51,7 @@ export function AttentionCard({
 
         {metric.status === "ok" ? (
           <span data-numeric className="text-2xl leading-tight font-semibold">
-            {metric.value}
+            {formatValue(metric.value)}
           </span>
         ) : null}
 

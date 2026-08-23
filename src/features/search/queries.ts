@@ -11,9 +11,10 @@ export type SearchResults = {
   clients: { id: string; fullName: string; phone: string }[];
   pets: { id: string; name: string; ownerName: string }[];
   appointments: { id: string; startsAt: string; clientName: string; petName: string }[];
+  invoices: { id: string; invoiceNumber: string; status: string; clientName: string }[];
 };
 
-const EMPTY: SearchResults = { clients: [], pets: [], appointments: [] };
+const EMPTY: SearchResults = { clients: [], pets: [], appointments: [], invoices: [] };
 
 export async function globalSearch(term: string): Promise<SearchResults> {
   const trimmed = term.trim();
@@ -59,15 +60,24 @@ export async function globalSearch(term: string): Promise<SearchResults> {
         .limit(1)
     : null;
 
-  const [clientsResult, petsResult, appointmentsResult] = await Promise.all([
+  const invoicesQuery = supabase
+    .from("invoices")
+    .select("id, invoice_number, status, client:clients (full_name)")
+    .is("deleted_at", null)
+    .or([`invoice_number.ilike.%${escaped}%`, ...(isUuid ? [`id.eq.${trimmed}`] : [])].join(","))
+    .limit(10);
+
+  const [clientsResult, petsResult, appointmentsResult, invoicesResult] = await Promise.all([
     clientsQuery,
     petsQuery,
     appointmentsQuery,
+    invoicesQuery,
   ]);
 
   if (clientsResult.error) console.error("[search] clients failed", clientsResult.error);
   if (petsResult.error) console.error("[search] pets failed", petsResult.error);
   if (appointmentsResult?.error) console.error("[search] appointments failed", appointmentsResult.error);
+  if (invoicesResult.error) console.error("[search] invoices failed", invoicesResult.error);
 
   type One<T> = T | T[] | null;
   const one = <T,>(value: One<T>): T | null => (Array.isArray(value) ? (value[0] ?? null) : value);
@@ -91,6 +101,13 @@ export async function globalSearch(term: string): Promise<SearchResults> {
       clientName: one<any>(row.client)?.full_name ?? "Unknown client",
       /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- shaped by the select above */
       petName: one<any>(row.pet)?.name ?? "Unknown patient",
+    })),
+    invoices: (invoicesResult.data ?? []).map((row) => ({
+      id: row.id,
+      invoiceNumber: row.invoice_number,
+      status: row.status,
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- shaped by the select above */
+      clientName: one<any>(row.client)?.full_name ?? "Unknown client",
     })),
   };
 }

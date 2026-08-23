@@ -65,11 +65,11 @@ describe("admin dashboard", () => {
     expect(html).toContain(`>${seededClients}<`);
   });
 
-  it("says a figure is unavailable rather than showing a confident zero", async () => {
+  it("shows a real count of unpaid invoices, not a placeholder", async () => {
     const html = await (await adminSession.page("/admin")).text();
 
     expect(html).toContain("Unpaid invoices");
-    expect(html).toContain("Available in phase 7");
+    expect(html).not.toContain("Available in phase 7");
   });
 
   it("shows a real count of appointments today, not a placeholder", async () => {
@@ -141,15 +141,10 @@ describe("client dashboard", () => {
 describe("no dashboard invents clinical data", () => {
   it.each([
     ["/client", () => clientSession],
+    ["/doctor", () => doctorSession],
     ["/admin", () => adminSession],
-  ])("%s marks unbuilt figures as pending", async (path, session) => {
+  ])("%s no longer has any unbuilt figures — Phase 7 was the last one", async (path, session) => {
     const html = await (await session().page(path)).text();
-
-    expect(html).toMatch(/Available in phase \d/);
-  });
-
-  it("/doctor no longer has any unbuilt figures — Phase 6 was the last one", async () => {
-    const html = await (await doctorSession.page("/doctor")).text();
 
     expect(html).not.toMatch(/Available in phase \d/);
   });

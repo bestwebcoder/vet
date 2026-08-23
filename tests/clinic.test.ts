@@ -264,10 +264,11 @@ describe("the patient record is the same record everywhere", () => {
     }
   });
 
-  it("renders unbuilt tabs the same way", async () => {
+  it("renders the same built tab content on the admin side too — every tab is built as of Phase 7", async () => {
     const html = await (await adminSession.page(`/admin/patients/${petId}/billing`)).text();
 
-    expect(html).toContain("Billing is not available yet");
+    expect(html).not.toContain("is not available yet");
+    expect(html).toContain("No invoices yet");
   });
 });
 

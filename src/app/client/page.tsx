@@ -14,6 +14,7 @@ import { getNextAppointmentForClient } from "@/features/appointments/queries";
 import { getOwnClientRecord } from "@/features/clients/queries";
 import { listPets, signedPhotoUrl } from "@/features/pets/queries";
 import { listPetDewormingStatuses } from "@/features/deworming/queries";
+import { listInvoicesForClient } from "@/features/invoices/queries";
 import { listPetVaccinationStatuses } from "@/features/vaccinations/queries";
 import { firstName } from "@/lib/names";
 import { getDueInfo } from "@/lib/due-window";
@@ -35,10 +36,11 @@ export default async function ClientDashboardPage() {
 
   const petIds = pets.status === "ok" ? pets.data.map((pet) => pet.id) : [];
 
-  const [photos, vaccinationResult, dewormingResult] = await Promise.all([
+  const [photos, vaccinationResult, dewormingResult, invoicesResult] = await Promise.all([
     pets.status === "ok" ? Promise.all(pets.data.map((pet) => signedPhotoUrl(pet.photoPath))) : Promise.resolve([]),
     listPetVaccinationStatuses(petIds),
     listPetDewormingStatuses(petIds),
+    client.status === "ok" && client.data ? listInvoicesForClient(client.data.id) : Promise.resolve({ status: "error" as const }),
   ]);
 
   const vaccinationByPet = new Map(
@@ -56,6 +58,15 @@ export default async function ClientDashboardPage() {
       ? {
           status: "ok",
           value: vaccinationResult.data.filter((row) => ["due_in_7", "due_today", "overdue"].includes(getDueInfo(row.nextDueDate).status))
+            .length,
+        }
+      : { status: "error" };
+
+  const unpaidInvoicesMetric: Metric =
+    invoicesResult.status === "ok"
+      ? {
+          status: "ok",
+          value: invoicesResult.data.filter((invoice) => invoice.status === "issued" || invoice.status === "partially_paid")
             .length,
         }
       : { status: "error" };
@@ -90,7 +101,7 @@ export default async function ClientDashboardPage() {
           />
           <AttentionCard
             label="Unpaid invoices"
-            metric={{ status: "pending", phase: 7 }}
+            metric={unpaidInvoicesMetric}
             href="/client/invoices"
             icon={Receipt}
           />

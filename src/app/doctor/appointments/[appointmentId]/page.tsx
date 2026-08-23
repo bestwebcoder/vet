@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ClipboardList, FileText, Syringe, Worm } from "lucide-react";
+import { ClipboardList, FileText, Receipt, Syringe, Worm } from "lucide-react";
 
 import { AppointmentStatusBadge } from "@/components/appointments/status-badge";
 import { AppointmentStatusActions } from "@/components/appointments/status-actions";
@@ -145,6 +145,15 @@ export default async function DoctorAppointmentDetailPage({
           <Worm aria-hidden />
           Deworming
         </Link>
+        {appointment.status === "completed" ? (
+          <Link
+            href={`/doctor/appointments/${appointment.id}/invoice`}
+            className={buttonVariants({ variant: "outline", size: "touch" })}
+          >
+            <Receipt aria-hidden />
+            Invoice
+          </Link>
+        ) : null}
       </div>
 
       {!isFinal ? (

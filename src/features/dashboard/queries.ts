@@ -55,6 +55,56 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   return { clients, doctors, staff, branches };
 }
 
+export type AdminRevenue = {
+  todayRevenuePaisa: Metric;
+  monthRevenuePaisa: Metric;
+  outstandingBalancePaisa: Metric;
+  unpaidInvoices: Metric;
+};
+
+const UNPAID_STATUSES = ["issued", "partially_paid"];
+
+/** §7.7 — the admin dashboard's revenue cards, computed from payments/invoices, never estimated. */
+export async function getAdminRevenue(): Promise<AdminRevenue> {
+  const supabase = await createClient();
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+
+  const [todayResult, monthResult, outstandingResult, unpaidResult] = await Promise.all([
+    supabase.from("payments").select("amount_paisa").gte("paid_at", startOfToday.toISOString()),
+    supabase.from("payments").select("amount_paisa").gte("paid_at", startOfMonth.toISOString()),
+    supabase.from("invoices").select("balance_paisa").in("status", UNPAID_STATUSES).is("deleted_at", null),
+    supabase
+      .from("invoices")
+      .select("*", { count: "exact", head: true })
+      .in("status", UNPAID_STATUSES)
+      .is("deleted_at", null),
+  ]);
+
+  const sum = (rows: { amount_paisa?: number; balance_paisa?: number }[] | null, key: "amount_paisa" | "balance_paisa") =>
+    (rows ?? []).reduce((total, row) => total + (row[key] ?? 0), 0);
+
+  const todayRevenuePaisa: Metric = todayResult.error
+    ? { status: "error" }
+    : { status: "ok", value: sum(todayResult.data, "amount_paisa") };
+
+  const monthRevenuePaisa: Metric = monthResult.error
+    ? { status: "error" }
+    : { status: "ok", value: sum(monthResult.data, "amount_paisa") };
+
+  const outstandingBalancePaisa: Metric = outstandingResult.error
+    ? { status: "error" }
+    : { status: "ok", value: sum(outstandingResult.data, "balance_paisa") };
+
+  const unpaidInvoices: Metric = unpaidResult.error
+    ? { status: "error" }
+    : { status: "ok", value: unpaidResult.count ?? 0 };
+
+  return { todayRevenuePaisa, monthRevenuePaisa, outstandingBalancePaisa, unpaidInvoices };
+}
+
 export type DoctorOverview = {
   clients: Metric;
   colleagues: Metric;
@@ -182,6 +232,11 @@ export function describeAction(action: string): string {
     "vaccinations.update": "Vaccination updated",
     "deworming_records.insert": "Deworming recorded",
     "deworming_records.update": "Deworming updated",
+    "service_categories.insert": "Service category added",
+    "service_categories.update": "Service category updated",
+    "invoices.insert": "Invoice created",
+    "invoices.update": "Invoice updated",
+    "payments.insert": "Payment recorded",
   };
 
   return readable[action] ?? action;

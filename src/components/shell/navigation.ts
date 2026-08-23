@@ -45,7 +45,7 @@ export const CLIENT_NAV: NavItem[] = [
   { label: "Prescriptions", href: "/client/prescriptions", icon: FileText },
   { label: "Vaccinations", href: "/client/vaccinations", icon: Syringe },
   { label: "Deworming", href: "/client/deworming", icon: Worm },
-  { label: "Invoices", href: "/client/invoices", icon: Receipt, phase: 7 },
+  { label: "Invoices", href: "/client/invoices", icon: Receipt },
   { label: "Notifications", href: "/client/notifications", icon: Bell, phase: 9 },
   { label: "Profile", href: "/client/profile", icon: UserCog },
 ];
@@ -71,9 +71,9 @@ export const ADMIN_NAV: NavItem[] = [
   // Not in any earlier phase's scope: managing doctors appears only in the
   // admin workflow of CLAUDE.md §12, which Phase 10 must satisfy.
   { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, phase: 10 },
-  { label: "Services", href: "/admin/services", icon: ClipboardList, phase: 7 },
-  { label: "Billing", href: "/admin/billing", icon: CreditCard, phase: 7 },
-  { label: "Payments", href: "/admin/payments", icon: Wallet, phase: 7 },
+  { label: "Services", href: "/admin/services", icon: ClipboardList },
+  { label: "Billing", href: "/admin/billing", icon: CreditCard },
+  { label: "Payments", href: "/admin/payments", icon: Wallet },
   { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe },
   { label: "Deworming", href: "/admin/deworming", icon: Worm },
   { label: "Reports", href: "/admin/reports", icon: FileText, phase: 8 },
