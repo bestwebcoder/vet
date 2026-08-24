@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { PUBLIC_NAV_LINKS } from "@/components/marketing/nav-links";
 import { PublicMobileNav } from "@/components/marketing/public-mobile-nav";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 
 export function PublicHeader({ practiceName }: { practiceName: string }) {
@@ -22,6 +23,7 @@ export function PublicHeader({ practiceName }: { practiceName: string }) {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <ThemeToggle size="icon-lg" />
           <Link href="/login" className={buttonVariants({ variant: "ghost", size: "touch" })}>
             Sign in
           </Link>
@@ -30,7 +32,10 @@ export function PublicHeader({ practiceName }: { practiceName: string }) {
           </Link>
         </div>
 
-        <PublicMobileNav />
+        <div className="flex items-center gap-1 lg:hidden">
+          <ThemeToggle size="icon-lg" />
+          <PublicMobileNav />
+        </div>
       </div>
     </header>
   );

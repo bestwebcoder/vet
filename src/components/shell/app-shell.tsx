@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { NavLinks } from "@/components/shell/nav-links";
 import type { Area } from "@/components/shell/navigation";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
 import type { SessionUser } from "@/features/auth/session";
@@ -64,6 +65,7 @@ export function AppShell({
                 <Search aria-hidden />
               </Link>
             ) : null}
+            <ThemeToggle />
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 Sign out
@@ -87,11 +89,14 @@ function UserPanel({ user }: { user: SessionUser }) {
         <span className="truncate text-sm font-medium">{user.fullName}</span>
         <span className="text-muted-foreground truncate text-xs">{user.email}</span>
       </div>
-      <form action={logoutAction}>
-        <Button type="submit" variant="outline" size="sm" className="w-full">
-          Sign out
-        </Button>
-      </form>
+      <div className="flex items-center gap-2">
+        <form action={logoutAction} className="flex-1">
+          <Button type="submit" variant="outline" size="sm" className="w-full">
+            Sign out
+          </Button>
+        </form>
+        <ThemeToggle size="icon-sm" />
+      </div>
     </div>
   );
 }
