@@ -2,6 +2,7 @@ import { Users } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/states/empty-state";
+import { Badge } from "@/components/ui/badge";
 import type { ClientDetail } from "@/features/clients/queries";
 
 /**
@@ -34,13 +35,16 @@ export function ClientList({
   return (
     <ul className="divide-border grid divide-y">
       {clients.map((client) => (
-        <li key={client.id}>
+        <li key={client.id} className={!client.isActive ? "opacity-70" : undefined}>
           <Link
             href={`${basePath}/${client.id}`}
             className="hover:bg-muted/50 focus-visible:ring-ring -mx-2 flex min-h-11 items-center gap-4 rounded-lg px-2 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             <div className="grid flex-1 gap-0.5">
-              <span className="text-sm font-medium">{client.fullName}</span>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {client.fullName}
+                {!client.isActive ? <Badge variant="destructive">Deactivated</Badge> : null}
+              </span>
               <span className="text-muted-foreground text-sm" data-numeric>
                 {client.phone}
                 {client.city ? ` · ${client.city}` : ""}

@@ -12,6 +12,7 @@ export type ClientSummary = {
   email: string | null;
   city: string | null;
   petCount: number;
+  isActive: boolean;
 };
 
 export type ClientDetail = ClientSummary & {
@@ -27,7 +28,7 @@ export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 const CLIENT_COLUMNS = `
   id, user_id, organization_id, full_name, phone, alternate_phone, email,
-  address, city, notes, preferred_branch_id,
+  address, city, notes, preferred_branch_id, deleted_at,
   pets(count)
 `;
 
@@ -46,6 +47,7 @@ function toDetail(row: any): ClientDetail {
     notes: row.notes,
     preferredBranchId: row.preferred_branch_id,
     petCount: row.pets?.[0]?.count ?? 0,
+    isActive: row.deleted_at === null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -84,16 +86,18 @@ export async function getOwnClientRecord(): Promise<Result<ClientDetail | null>>
  * a record stored as "+8801712345678".
  */
 export async function listClients(
-  options: { search?: string; limit?: number } = {},
+  options: { search?: string; limit?: number; includeInactive?: boolean } = {},
 ): Promise<Result<ClientDetail[]>> {
   const supabase = await createClient();
 
-  let query = supabase
-    .from("clients")
-    .select(CLIENT_COLUMNS)
-    .is("deleted_at", null)
-    .order("full_name")
-    .limit(options.limit ?? 50);
+  let query = supabase.from("clients").select(CLIENT_COLUMNS).order("full_name").limit(options.limit ?? 50);
+
+  // Day-to-day pickers (new patient, patient search) only ever want active
+  // clients; the admin client-management screen opts into seeing everyone so
+  // a deactivated account can be found and reactivated.
+  if (!options.includeInactive) {
+    query = query.is("deleted_at", null);
+  }
 
   const search = options.search?.trim();
 
@@ -122,6 +126,11 @@ export async function listClients(
   return { status: "ok", data: (data ?? []).map(toDetail) };
 }
 
+/**
+ * Not filtered by deleted_at: a deactivated client's record must still open
+ * so an admin can review it, reactivate it, or look up a pet's owner from
+ * existing clinical history.
+ */
 export async function getClientRecord(clientId: string): Promise<Result<ClientDetail | null>> {
   const supabase = await createClient();
 
@@ -129,7 +138,6 @@ export async function getClientRecord(clientId: string): Promise<Result<ClientDe
     .from("clients")
     .select(CLIENT_COLUMNS)
     .eq("id", clientId)
-    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {

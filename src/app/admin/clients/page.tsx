@@ -17,7 +17,7 @@ export default async function AdminClientsPage({ searchParams }: PageProps<"/adm
 
   const { q } = await searchParams;
   const search = typeof q === "string" ? q : undefined;
-  const result = await listClients({ search });
+  const result = await listClients({ search, includeInactive: true });
 
   return (
     <div className="grid gap-6">

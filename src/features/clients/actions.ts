@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { requireRole } from "@/features/auth/session";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { clientSchema, clientToRow } from "@/lib/validation/client";
@@ -94,4 +95,58 @@ export async function updateClientAction(
   revalidatePath("/doctor/patients");
 
   return { status: "success", message: "Changes saved.", id: clientId };
+}
+
+/**
+ * Deactivating removes login access (if any — a walk-in client may have none)
+ * and hides the client from day-to-day pickers, mirroring
+ * deactivateDoctorAction. Pets and clinical history stay intact.
+ */
+export async function deactivateClientAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin");
+
+  const clientId = text(formData, "clientId");
+  if (!clientId) return { status: "error", message: "We could not tell which client to deactivate." };
+
+  const userId = text(formData, "userId");
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+
+  const [{ error: clientError }, roleResult] = await Promise.all([
+    supabase.from("clients").update({ deleted_at: now }).eq("id", clientId),
+    userId
+      ? supabase.from("user_roles").update({ revoked_at: now }).eq("user_id", userId).is("revoked_at", null)
+      : Promise.resolve({ error: null }),
+  ]);
+
+  if (clientError || roleResult.error) {
+    return failure("clients", clientError ?? roleResult.error, "We could not deactivate this client just now. Please try again.");
+  }
+
+  revalidatePath("/admin/clients");
+  revalidatePath(`/admin/clients/${clientId}`);
+  return { status: "success", message: "Client deactivated." };
+}
+
+export async function reactivateClientAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin");
+
+  const clientId = text(formData, "clientId");
+  if (!clientId) return { status: "error", message: "We could not tell which client to reactivate." };
+
+  const userId = text(formData, "userId");
+  const supabase = await createClient();
+
+  const [{ error: clientError }, roleResult] = await Promise.all([
+    supabase.from("clients").update({ deleted_at: null }).eq("id", clientId),
+    userId ? supabase.from("user_roles").update({ revoked_at: null }).eq("user_id", userId) : Promise.resolve({ error: null }),
+  ]);
+
+  if (clientError || roleResult.error) {
+    return failure("clients", clientError ?? roleResult.error, "We could not reactivate this client just now. Please try again.");
+  }
+
+  revalidatePath("/admin/clients");
+  revalidatePath(`/admin/clients/${clientId}`);
+  return { status: "success", message: "Client reactivated." };
 }

@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ClientDeactivateToggle } from "@/components/clients/client-deactivate-toggle";
 import { PatientList } from "@/components/pets/patient-list";
 import { ErrorState } from "@/components/states/error-state";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
@@ -43,7 +45,10 @@ export default async function AdminClientDetailPage({
     <div className="grid gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid gap-1">
-          <h1>{client.fullName}</h1>
+          <h1 className="flex items-center gap-2">
+            {client.fullName}
+            {!client.isActive ? <Badge variant="destructive">Deactivated</Badge> : null}
+          </h1>
           <p className="text-muted-foreground">
             <Link href="/admin/clients" className="underline underline-offset-4">
               Back to clients
@@ -51,13 +56,16 @@ export default async function AdminClientDetailPage({
           </p>
         </div>
 
-        <Link
-          href={`/admin/clients/${client.id}/edit`}
-          className={buttonVariants({ variant: "outline", size: "touch" })}
-        >
-          <Pencil aria-hidden />
-          Edit
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/clients/${client.id}/edit`}
+            className={buttonVariants({ variant: "outline", size: "touch" })}
+          >
+            <Pencil aria-hidden />
+            Edit
+          </Link>
+          <ClientDeactivateToggle clientId={client.id} userId={client.userId} isActive={client.isActive} />
+        </div>
       </div>
 
       <Card>
