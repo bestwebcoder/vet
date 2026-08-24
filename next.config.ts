@@ -37,6 +37,17 @@ const nextConfig: NextConfig = {
     // Supabase URL is a public hostname, so this stays off there.
     ...(isLocalSupabase ? { dangerouslyAllowLocalIP: true } : {}),
   },
+  experimental: {
+    serverActions: {
+      // Next's default is 1MB — too small for this app's own document
+      // upload (src/features/documents/actions.ts caps files at 20MB).
+      // Set just above that cap, not "big enough for anything": Server
+      // Actions run in the same request/response cycle as the page, so an
+      // unbounded body limit is a denial-of-service surface, not a
+      // convenience.
+      bodySizeLimit: "21mb",
+    },
+  },
 };
 
 export default nextConfig;
