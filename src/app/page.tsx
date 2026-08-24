@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
 import { getPublicLeadDoctor } from "@/features/doctors/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
+import { getPublicSiteContent } from "@/features/site-content/queries";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 
 export const metadata: Metadata = { title: "TV Care" };
@@ -22,7 +23,8 @@ export default async function RootPage() {
 
   if (!user) {
     const [organization, leadDoctor] = await Promise.all([getPublicOrganizationInfo(), getPublicLeadDoctor()]);
-    return <FrontPage organization={organization} leadDoctor={leadDoctor} />;
+    const content = organization ? await getPublicSiteContent(organization.id) : {};
+    return <FrontPage organization={organization} leadDoctor={leadDoctor} content={content} />;
   }
 
   const home = homeHrefFor(user);
