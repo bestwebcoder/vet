@@ -11,10 +11,12 @@ import { createServiceClient } from "@/lib/supabase/service";
 /**
  * A public-bucket object's URL is a deterministic string, not a signed
  * grant — no client/auth needed to build it. Same shape as
- * heroImagePublicUrl in src/features/organizations/queries.ts.
+ * heroImagePublicUrl in src/features/organizations/queries.ts, including the
+ * `v` cache-buster: the path is overwritten in place on re-upload, so
+ * without it browsers and the storage CDN keep serving the old photo.
  */
-function doctorPhotoPublicUrl(path: string): string {
-  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/doctor-photos/${path}`;
+function doctorPhotoPublicUrl(path: string, updatedAt: string): string {
+  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/doctor-photos/${path}?v=${Date.parse(updatedAt)}`;
 }
 
 export type DoctorSummary = {
@@ -42,7 +44,7 @@ export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 const DOCTOR_COLUMNS = `
   id, user_id, organization_id, primary_branch_id, specialization, registration_number,
-  qualifications, bio, signature_url, photo_path,
+  qualifications, bio, signature_url, photo_path, updated_at,
   is_accepting_appointments, deleted_at, can_manage_billing, can_view_reports, is_lead_doctor,
   user:user_id (full_name, email, phone)
 `;
@@ -69,7 +71,7 @@ function toSummary(row: any): DoctorSummary {
     primaryBranchId: row.primary_branch_id,
     signatureUrl: row.signature_url,
     photoPath: row.photo_path,
-    photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path) : null,
+    photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path, row.updated_at) : null,
     isAcceptingAppointments: row.is_accepting_appointments,
     isActive: row.deleted_at === null,
     canManageBilling: row.can_manage_billing,
@@ -186,7 +188,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
 
   const { data, error } = await supabase
     .from("doctors")
-    .select("id, specialization, qualifications, bio, photo_path, is_lead_doctor, user:user_id (full_name)")
+    .select("id, specialization, qualifications, bio, photo_path, updated_at, is_lead_doctor, user:user_id (full_name)")
     .is("deleted_at", null)
     .order("id");
 
@@ -205,7 +207,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
         specialization: row.specialization,
         qualifications: row.qualifications,
         bio: row.bio,
-        photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path) : null,
+        photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path, row.updated_at) : null,
         isLeadDoctor: row.is_lead_doctor,
       };
     }),

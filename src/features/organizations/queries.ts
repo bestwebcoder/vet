@@ -8,9 +8,14 @@ import { createServiceClient } from "@/lib/supabase/service";
  * A public-bucket object's URL is a deterministic string, not a signed
  * grant — no client/auth needed to build it, unlike every other storage
  * path in this app (which all resolve through a signed URL instead).
+ *
+ * The path itself never changes across re-uploads (upsert overwrites it in
+ * place), so a `v` cache-buster tied to `updated_at` is required — without
+ * it, browsers and the storage CDN keep serving the previous image after an
+ * admin uploads a new one.
  */
-function heroImagePublicUrl(path: string): string {
-  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}`;
+function heroImagePublicUrl(path: string, updatedAt: string): string {
+  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}?v=${Date.parse(updatedAt)}`;
 }
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
@@ -36,7 +41,7 @@ export type Organization = {
 
 const ORGANIZATION_COLUMNS = `
   id, name, legal_name, timezone, email, phone, whatsapp_number, address, city, country, is_active,
-  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path
+  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path, updated_at
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -57,7 +62,7 @@ function toOrganization(row: any): Organization {
     quietHoursStart: row.quiet_hours_start,
     quietHoursEnd: row.quiet_hours_end,
     heroImagePath: row.hero_image_path,
-    heroImageUrl: row.hero_image_path ? heroImagePublicUrl(row.hero_image_path) : null,
+    heroImageUrl: row.hero_image_path ? heroImagePublicUrl(row.hero_image_path, row.updated_at) : null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -103,7 +108,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path")
+    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path, updated_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -125,6 +130,6 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     whatsappNumber: data.whatsapp_number,
     address: data.address,
     city: data.city,
-    heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path) : null,
+    heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path, data.updated_at) : null,
   };
 }

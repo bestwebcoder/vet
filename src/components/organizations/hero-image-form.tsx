@@ -42,7 +42,10 @@ export function HeroImageForm({ heroImageUrl }: { heroImageUrl: string | null })
               className="h-11 py-2.5"
               aria-invalid={Boolean(fieldErrors?.heroImage) || undefined}
             />
-            <p className="text-muted-foreground text-sm">Shown beside the headline on the public Home page.</p>
+            <p className="text-muted-foreground text-sm">
+              Shown beside the headline on the public Home page. JPEG, PNG or WebP, up to 5&nbsp;MB — a 4:3 photo
+              (e.g. 1200×900px) fits the frame best.
+            </p>
           </div>
           <SubmitButton pendingLabel="Uploading…">Save image</SubmitButton>
         </form>

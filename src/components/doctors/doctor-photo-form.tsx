@@ -43,6 +43,10 @@ export function DoctorPhotoForm({ doctorId, photoUrl }: { doctorId: string; phot
           />
           <SubmitButton pendingLabel="Uploading…">Save photo</SubmitButton>
         </div>
+        <p className="text-muted-foreground text-sm">
+          JPEG, PNG or WebP, up to 5&nbsp;MB — a square, face-centred photo (e.g. 500×500px) crops best in the
+          circular frame.
+        </p>
       </form>
     </div>
   );
