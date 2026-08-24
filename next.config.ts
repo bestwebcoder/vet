@@ -3,7 +3,23 @@ import type { NextConfig } from "next";
 // Derived from the configured Supabase project so this works in every
 // environment (local: http://127.0.0.1:54321, production: an https://*.supabase.co
 // URL) without editing this file per deploy. Scoped to the storage path only.
-const supabaseUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321");
+//
+// Guarded with a try/catch, not just `?? fallback`: an *unset* env var is
+// `undefined` and falls back fine, but a platform that predeclares the
+// variable with an empty value (seen on Vercel) leaves it as `""` — not
+// nullish, so `??` never catches it, and `new URL("")` throws and fails the
+// entire build before a single page can be built.
+function resolveSupabaseUrl(): URL {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  try {
+    if (!raw) throw new Error("empty");
+    return new URL(raw);
+  } catch {
+    return new URL("http://127.0.0.1:54321");
+  }
+}
+
+const supabaseUrl = resolveSupabaseUrl();
 const isLocalSupabase = ["127.0.0.1", "localhost"].includes(supabaseUrl.hostname);
 
 const nextConfig: NextConfig = {
