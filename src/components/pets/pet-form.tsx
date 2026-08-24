@@ -7,8 +7,8 @@ import { Field } from "@/components/form/field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImageCropField } from "@/components/media/image-crop-field";
 import { SelectField } from "@/components/form/select-field";
 import type { PetDetail } from "@/features/pets/queries";
 import { idleState, type FormState } from "@/lib/forms";
@@ -196,17 +196,15 @@ export function PetForm({
             errors={fieldErrors?.notes}
           />
 
-          <div className="grid gap-2">
-            <Label htmlFor="photo">Photo</Label>
-            <Input
-              id="photo"
-              name="photo"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="h-11 py-2.5"
-            />
-            <p className="text-muted-foreground text-sm">JPEG, PNG or WebP, up to 5 MB.</p>
-          </div>
+          <ImageCropField
+            name="photo"
+            label="Photo"
+            hint="Crop to the square frame it's shown in across the app."
+            errors={fieldErrors?.photo}
+            aspect={1}
+            outputWidth={500}
+            outputHeight={500}
+          />
 
           <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
         </form>
