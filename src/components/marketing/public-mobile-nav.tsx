@@ -23,8 +23,15 @@ export function PublicMobileNav() {
       />
       <SheetContent side="left" className="w-72 p-0">
         <SheetHeader className="border-b">
-          <SheetTitle>TV Care</SheetTitle>
-          <SheetDescription>The Traveling Vet</SheetDescription>
+          <div className="flex items-center gap-2.5">
+            <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-semibold">
+              TV
+            </span>
+            <span>
+              <SheetTitle>TV Care</SheetTitle>
+              <SheetDescription>The Traveling Vet</SheetDescription>
+            </span>
+          </div>
         </SheetHeader>
         <nav className="grid gap-1 p-3">
           {PUBLIC_NAV_LINKS.map((link) => (

@@ -11,8 +11,13 @@ export function PublicFooter({ organization }: { organization: PublicOrganizatio
     <>
       <footer className="border-border/60 border-t">
         <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-10 sm:grid-cols-2 sm:px-6">
-          <div className="text-muted-foreground grid gap-1 text-sm">
-            <p className="text-foreground font-medium">{practiceName}</p>
+          <div className="text-muted-foreground grid gap-3 text-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold">
+                TV
+              </span>
+              <p className="text-foreground font-medium">{practiceName}</p>
+            </div>
             {organization?.address || organization?.city ? (
               <p>{[organization.address, organization.city].filter(Boolean).join(", ")}</p>
             ) : null}
@@ -20,7 +25,7 @@ export function PublicFooter({ organization }: { organization: PublicOrganizatio
               {organization?.phone ? <span>{organization.phone}</span> : null}
               {organization?.email ? <span>{organization.email}</span> : null}
             </p>
-            <p className="mt-4">© {new Date().getFullYear()} TV Care.</p>
+            <p>© {new Date().getFullYear()} TV Care.</p>
           </div>
 
           <nav className="flex flex-wrap gap-x-6 gap-y-2 sm:justify-end" aria-label="Footer">

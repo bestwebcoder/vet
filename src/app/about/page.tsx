@@ -5,6 +5,8 @@ import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
+import { siteContentValue } from "@/features/site-content/fields";
+import { getPublicSiteContent } from "@/features/site-content/queries";
 
 export const metadata: Metadata = { title: "About Us · TV Care" };
 
@@ -29,28 +31,32 @@ const VALUES = [
 export default async function AboutPage() {
   const organization = await getPublicOrganizationInfo();
   const practiceName = organization?.name ?? "The Traveling Vet";
+  const content = organization ? await getPublicSiteContent(organization.id) : {};
+  const text = (key: string) => siteContentValue(content, key, practiceName);
 
   return (
     <div className="flex min-h-svh flex-col">
       <PublicHeader practiceName={practiceName} />
 
       <main className="flex-1">
-        <section className="mx-auto w-full max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-24">
-          <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">About {practiceName}</h1>
-          <p className="text-muted-foreground mt-6 text-lg text-balance">
-            {practiceName} is a veterinary practice built around the appointment, not the paperwork —
-            clinic consultations and home visits from real doctors, with every record kept in one place
-            for the life of your pet.
-          </p>
+        <section className="relative overflow-hidden">
+          <div
+            aria-hidden
+            className="bg-primary/15 pointer-events-none absolute top-[-10rem] left-1/2 size-[28rem] -translate-x-1/2 rounded-full blur-3xl"
+          />
+          <div className="relative mx-auto w-full max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-24">
+            <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">About {practiceName}</h1>
+            <p className="text-muted-foreground mt-6 text-lg text-balance">{text("about.intro")}</p>
+          </div>
         </section>
 
         <section className="border-border/60 border-t bg-muted/40">
           <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
             <div className="grid gap-6 sm:grid-cols-3">
               {VALUES.map(({ icon: Icon, title, description }) => (
-                <Card key={title}>
+                <Card key={title} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                   <CardContent className="grid gap-3">
-                    <span className="bg-secondary text-secondary-foreground flex size-10 items-center justify-center rounded-full">
+                    <span className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-full">
                       <Icon className="size-5" aria-hidden />
                     </span>
                     <p className="font-medium">{title}</p>
@@ -65,16 +71,11 @@ export default async function AboutPage() {
         <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
           <h2 className="text-2xl font-semibold tracking-tight">How we work</h2>
           <div className="text-muted-foreground mt-4 grid gap-4">
-            <p>
-              Booking is simple: choose a doctor, a time, and whether you&rsquo;d rather come to the clinic or
-              have the doctor come to you. From there, everything about that visit — the assessment, any
-              prescription, vaccinations given, and the invoice — is recorded against your pet&rsquo;s own account,
-              so you and your care team can always see the full picture.
-            </p>
-            <p>
-              We track vaccination and deworming schedules for you and send a reminder before the next one is
-              due, so nothing falls through between visits.
-            </p>
+            {text("about.how_we_work")
+              .split("\n\n")
+              .map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
           </div>
         </section>
       </main>
