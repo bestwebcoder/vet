@@ -173,42 +173,31 @@ describe("registration provisions an account", () => {
   });
 });
 
-describe("email confirmation", () => {
-  it("blocks sign in until the address is confirmed, then allows it", async () => {
+describe("sign in after registration", () => {
+  it("signs in immediately — no email confirmation required", async () => {
     const suffix = uniqueSuffix();
     const signup = selfRegistration(suffix);
 
-    await anonClient().auth.signUp(signup);
+    const signedUp = await anonClient().auth.signUp(signup);
+    // Confirmations are disabled (config.toml, auth.email.enable_confirmations
+    // = false): signUp itself returns a session, so the client is already
+    // signed in before ever calling signInWithPassword.
+    expect(signedUp.data.user?.email_confirmed_at).not.toBeNull();
+    expect(signedUp.data.session).not.toBeNull();
 
-    const beforeConfirm = await anonClient().auth.signInWithPassword({
+    const signedIn = await anonClient().auth.signInWithPassword({
       email: signup.email,
       password: PASSWORD,
     });
-    expect(beforeConfirm.error?.code).toBe("email_not_confirmed");
-
-    const body = await waitForEmail(signup.email, /confirm your tv care account/i);
-    const verifier = anonClient();
-    const { error: verifyError } = await verifier.auth.verifyOtp({
-      type: "email",
-      token_hash: tokenHashFrom(body),
-    });
-    expect(verifyError).toBeNull();
-
-    const afterConfirm = await anonClient().auth.signInWithPassword({
-      email: signup.email,
-      password: PASSWORD,
-    });
-    expect(afterConfirm.error).toBeNull();
-    expect(afterConfirm.data.session).not.toBeNull();
-  }, 30_000);
+    expect(signedIn.error).toBeNull();
+    expect(signedIn.data.session).not.toBeNull();
+  });
 
   it("records the login in the audit trail", async () => {
     const suffix = uniqueSuffix();
     const signup = selfRegistration(suffix);
     const { data: signUpData } = await anonClient().auth.signUp(signup);
 
-    const body = await waitForEmail(signup.email, /confirm your tv care account/i);
-    await anonClient().auth.verifyOtp({ type: "email", token_hash: tokenHashFrom(body) });
     await anonClient().auth.signInWithPassword({ email: signup.email, password: PASSWORD });
 
     const { data: logins } = await admin
@@ -220,7 +209,7 @@ describe("email confirmation", () => {
     expect(logins!.length).toBeGreaterThanOrEqual(1);
     // The organization is resolved from the role the signup trigger granted.
     expect(logins![0].organization_id).not.toBeNull();
-  }, 30_000);
+  });
 });
 
 describe("password reset", () => {
@@ -228,9 +217,6 @@ describe("password reset", () => {
     const suffix = uniqueSuffix();
     const signup = selfRegistration(suffix);
     await anonClient().auth.signUp(signup);
-
-    const confirmBody = await waitForEmail(signup.email, /confirm your tv care account/i);
-    await anonClient().auth.verifyOtp({ type: "email", token_hash: tokenHashFrom(confirmBody) });
 
     const requester = anonClient();
     const { error: requestError } = await requester.auth.resetPasswordForEmail(signup.email);

@@ -43,11 +43,14 @@ export async function registerAction(
   const { fullName, email, phone, password } = parsed.data;
   const supabase = await createClient();
 
+  // Email confirmations are disabled for this project (config.toml,
+  // auth.email.enable_confirmations = false): signUp returns a session
+  // directly, and the client is signed in immediately — no confirmation
+  // link to send or wait for.
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${await siteOrigin()}/auth/confirm`,
       // signup_source is what tells the database trigger to provision a pet
       // owner. Accounts created any other way get a profile and nothing more.
       data: { full_name: fullName, phone, signup_source: "self_registration" },
@@ -79,10 +82,7 @@ export async function registerAction(
     };
   }
 
-  return {
-    status: "success",
-    message: "Check your email for a link to confirm your account.",
-  };
+  redirect("/");
 }
 
 export async function loginAction(_previous: FormState, formData: FormData): Promise<FormState> {

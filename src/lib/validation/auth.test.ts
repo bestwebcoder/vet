@@ -4,6 +4,7 @@ import {
   loginSchema,
   normalizePhone,
   passwordSchema,
+  pinPasswordSchema,
   registerSchema,
   resetPasswordSchema,
 } from "@/lib/validation/auth";
@@ -12,8 +13,8 @@ const validRegistration = {
   fullName: "Rehana Khatun",
   email: "Rehana@Example.com",
   phone: "01712345678",
-  password: "Test-Password-123",
-  confirmPassword: "Test-Password-123",
+  password: "482913",
+  confirmPassword: "482913",
 };
 
 describe("normalizePhone", () => {
@@ -45,14 +46,29 @@ describe("registerSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects mismatched passwords against the confirm field", () => {
+  it("rejects mismatched PINs against the confirm field", () => {
     const result = registerSchema.safeParse({
       ...validRegistration,
-      confirmPassword: "Different-Password-1",
+      confirmPassword: "111111",
     });
 
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toEqual(["confirmPassword"]);
+  });
+});
+
+describe("pinPasswordSchema mirrors the Supabase auth policy for client registration", () => {
+  it.each([
+    ["12345", "fewer than 6 digits"],
+    ["1234567", "more than 6 digits"],
+    ["12a456", "not all digits"],
+    ["", "empty"],
+  ])("rejects %s (%s)", (pin) => {
+    expect(pinPasswordSchema.safeParse(pin).success).toBe(false);
+  });
+
+  it("accepts exactly 6 digits", () => {
+    expect(pinPasswordSchema.safeParse("482913").success).toBe(true);
   });
 });
 

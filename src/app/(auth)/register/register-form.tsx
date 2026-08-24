@@ -13,23 +13,6 @@ const initialState: FormState = { status: "idle" };
 export function RegisterForm() {
   const [state, formAction] = useActionState(registerAction, initialState);
   const fieldErrors = state.status === "error" ? state.fieldErrors : undefined;
-  const submitted = state.status === "success";
-
-  if (submitted) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>{state.message}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm">
-            The link confirms your address and signs you in. You can close this page.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card>
@@ -71,19 +54,25 @@ export function RegisterForm() {
           />
 
           <Field
-            label="Password"
+            label="PIN"
             name="password"
             type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
             autoComplete="new-password"
             required
-            hint="At least 10 characters, with an uppercase letter, a lowercase letter and a number."
+            hint="Exactly 6 digits (0-9)."
             errors={fieldErrors?.password}
           />
 
           <Field
-            label="Confirm password"
+            label="Confirm PIN"
             name="confirmPassword"
             type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={6}
             autoComplete="new-password"
             required
             errors={fieldErrors?.confirmPassword}
