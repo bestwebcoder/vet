@@ -9,12 +9,24 @@ import { z } from "zod";
  * in the browser.
  */
 
+/**
+ * Some deployment platforms (Vercel, seen in production) pre-declare a
+ * variable the user hasn't set yet as an empty string rather than omitting
+ * it outright. `.optional()` alone only treats `undefined` as absent, so an
+ * unset-but-predeclared var still fails `.min(1)`. Every optional var in
+ * this file goes through this so "not configured" behaves the same either
+ * way the platform represents it.
+ */
+function optional<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
+}
+
 const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   // Phase 9 — Web Push. Optional: with no key, the push channel falls back
   // to the safe logging provider instead of failing to build.
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: optional(z.string().min(1)),
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
@@ -24,13 +36,13 @@ const serverEnvSchema = z.object({
   // Phase 9 — notification delivery. All optional: an unconfigured channel
   // degrades to the safe logging provider (src/lib/notifications/providers
   // /logging.ts) rather than crashing the app.
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z.coerce.number().int().positive().optional(),
-  SMTP_FROM: z.string().min(1).optional(),
-  VAPID_PUBLIC_KEY: z.string().min(1).optional(),
-  VAPID_PRIVATE_KEY: z.string().min(1).optional(),
-  VAPID_SUBJECT: z.string().min(1).optional(),
-  NOTIFICATION_CRON_SECRET: z.string().min(1).optional(),
+  SMTP_HOST: optional(z.string().min(1)),
+  SMTP_PORT: optional(z.coerce.number().int().positive()),
+  SMTP_FROM: optional(z.string().min(1)),
+  VAPID_PUBLIC_KEY: optional(z.string().min(1)),
+  VAPID_PRIVATE_KEY: optional(z.string().min(1)),
+  VAPID_SUBJECT: optional(z.string().min(1)),
+  NOTIFICATION_CRON_SECRET: optional(z.string().min(1)),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

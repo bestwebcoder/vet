@@ -29,6 +29,18 @@ describe("parsePublicEnv", () => {
       }),
     ).toThrow(/NEXT_PUBLIC_SUPABASE_URL/);
   });
+
+  it("treats an empty-string optional var as absent, not invalid", () => {
+    // Some platforms (Vercel, in production) predeclare an unset variable as
+    // "" rather than omitting it — this must not fail .min(1) validation.
+    const env = parsePublicEnv({
+      NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "anon-key",
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: "",
+    });
+
+    expect(env.NEXT_PUBLIC_VAPID_PUBLIC_KEY).toBeUndefined();
+  });
 });
 
 describe("parseServerEnv", () => {
@@ -47,5 +59,18 @@ describe("parseServerEnv", () => {
   it("coerces SMTP_PORT to a number", () => {
     const env = parseServerEnv({ SUPABASE_SERVICE_ROLE_KEY: "service-key", SMTP_PORT: "54325" });
     expect(env.SMTP_PORT).toBe(54325);
+  });
+
+  it("treats an empty-string optional var as absent, not invalid", () => {
+    const env = parseServerEnv({
+      SUPABASE_SERVICE_ROLE_KEY: "service-key",
+      SMTP_HOST: "",
+      SMTP_PORT: "",
+      VAPID_PUBLIC_KEY: "",
+    });
+
+    expect(env.SMTP_HOST).toBeUndefined();
+    expect(env.SMTP_PORT).toBeUndefined();
+    expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
   });
 });
