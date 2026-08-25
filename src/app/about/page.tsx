@@ -36,7 +36,7 @@ export default async function AboutPage() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} />
+      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} />
 
       <main className="flex-1">
         <section className="relative overflow-hidden">

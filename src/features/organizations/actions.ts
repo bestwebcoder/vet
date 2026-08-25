@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
 import { describeHeroImageProblem, readHeroImage, uploadHeroImage } from "@/features/organizations/hero-image";
+import { describeLogoImageProblem, readLogoImage, uploadLogoImage } from "@/features/organizations/logo-image";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { optionalText, optionalTime } from "@/lib/validation/common";
@@ -149,4 +150,44 @@ export async function updateHeroImageAction(_previous: FormState, formData: Form
   revalidatePath("/admin/settings");
   revalidatePath("/");
   return { status: "success", message: "Hero image updated." };
+}
+
+/** The practice logo shown in the site header on every public page — see the site-images bucket. */
+export async function updateLogoImageAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const file = readLogoImage(formData);
+  if (!file) {
+    return { status: "error", message: "Choose an image to upload.", fieldErrors: { logoImage: ["Required"] } };
+  }
+
+  const problem = describeLogoImageProblem(file);
+  if (problem) {
+    return { status: "error", message: problem, fieldErrors: { logoImage: [problem] } };
+  }
+
+  const uploaded = await uploadLogoImage(organizationId, file);
+  if (!uploaded.ok) {
+    return { status: "error", message: "We could not upload that image. Please try again." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("organizations")
+    .update({ logo_path: uploaded.path })
+    .eq("id", organizationId);
+
+  if (error) {
+    return failure("organizations", error, "We could not save the logo just now. Please try again.");
+  }
+
+  revalidatePath("/admin/settings");
+  // Shown in the header of every public page, not just Home — each fetches
+  // its own organization data independently, so each needs its own revalidate.
+  for (const path of ["/", "/about", "/services", "/contact", "/doctors"]) {
+    revalidatePath(path);
+  }
+  return { status: "success", message: "Logo updated." };
 }

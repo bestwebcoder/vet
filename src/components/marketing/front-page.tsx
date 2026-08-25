@@ -86,7 +86,7 @@ export function FrontPage({
 
   return (
     <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} />
+      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} />
 
       <main className="flex-1">
         {/* Hero */}

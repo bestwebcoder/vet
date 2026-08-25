@@ -5,6 +5,7 @@ import {
   CreditCard,
   FileText,
   FlaskConical,
+  Globe,
   Home,
   MessageSquare,
   PawPrint,
@@ -83,6 +84,8 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Reports", href: "/admin/reports", icon: FileText },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },
   { label: "Messages", href: "/admin/messages", icon: MessageSquare },
+  { label: "Team", href: "/admin/team", icon: UserCog },
+  { label: "Website", href: "/admin/website", icon: Globe },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];
 

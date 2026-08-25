@@ -18,6 +18,11 @@ function heroImagePublicUrl(path: string, updatedAt: string): string {
   return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}?v=${Date.parse(updatedAt)}`;
 }
 
+/** Same bucket and cache-buster shape as heroImagePublicUrl, a different stored path. */
+function logoImagePublicUrl(path: string, updatedAt: string): string {
+  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}?v=${Date.parse(updatedAt)}`;
+}
+
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 export type Organization = {
@@ -37,11 +42,13 @@ export type Organization = {
   quietHoursEnd: string | null;
   heroImagePath: string | null;
   heroImageUrl: string | null;
+  logoPath: string | null;
+  logoUrl: string | null;
 };
 
 const ORGANIZATION_COLUMNS = `
   id, name, legal_name, timezone, email, phone, whatsapp_number, address, city, country, is_active,
-  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path, updated_at
+  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path, logo_path, updated_at
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -63,6 +70,8 @@ function toOrganization(row: any): Organization {
     quietHoursEnd: row.quiet_hours_end,
     heroImagePath: row.hero_image_path,
     heroImageUrl: row.hero_image_path ? heroImagePublicUrl(row.hero_image_path, row.updated_at) : null,
+    logoPath: row.logo_path,
+    logoUrl: row.logo_path ? logoImagePublicUrl(row.logo_path, row.updated_at) : null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -93,6 +102,7 @@ export type PublicOrganizationInfo = {
   address: string | null;
   city: string | null;
   heroImageUrl: string | null;
+  logoUrl: string | null;
 };
 
 /**
@@ -108,7 +118,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path, updated_at")
+    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path, logo_path, updated_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -131,5 +141,6 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     address: data.address,
     city: data.city,
     heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path, data.updated_at) : null,
+    logoUrl: data.logo_path ? logoImagePublicUrl(data.logo_path, data.updated_at) : null,
   };
 }

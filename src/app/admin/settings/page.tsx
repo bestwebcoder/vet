@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
 
 import { HeroImageForm } from "@/components/organizations/hero-image-form";
+import { LogoImageForm } from "@/components/organizations/logo-image-form";
 import { SettingsForm } from "@/components/organizations/settings-form";
-import { SiteContentForm } from "@/components/organizations/site-content-form";
-import { TeamRolesForm } from "@/components/organizations/team-roles-form";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getOwnOrganization } from "@/features/organizations/queries";
-import { getSiteContentForAdmin } from "@/features/site-content/queries";
-import { getTeamRoster } from "@/features/team/queries";
 
 export const metadata: Metadata = { title: "Settings · TV Care" };
 
@@ -26,11 +23,7 @@ export default async function AdminSettingsPage() {
     );
   }
 
-  const [organization, siteContent, team] = await Promise.all([
-    getOwnOrganization(organizationId),
-    getSiteContentForAdmin(organizationId),
-    getTeamRoster(organizationId),
-  ]);
+  const organization = await getOwnOrganization(organizationId);
 
   return (
     <div className="grid gap-6">
@@ -48,25 +41,8 @@ export default async function AdminSettingsPage() {
       ) : (
         <>
           <SettingsForm organization={organization.data} />
+          <LogoImageForm logoUrl={organization.data.logoUrl} />
           <HeroImageForm heroImageUrl={organization.data.heroImageUrl} />
-          {team.status === "ok" ? (
-            <TeamRolesForm members={team.data} />
-          ) : (
-            <Card>
-              <CardContent>
-                <ErrorState title="Team could not be loaded" />
-              </CardContent>
-            </Card>
-          )}
-          {siteContent.status === "ok" ? (
-            <SiteContentForm content={siteContent.data} practiceName={organization.data.name} />
-          ) : (
-            <Card>
-              <CardContent>
-                <ErrorState title="Website content could not be loaded" />
-              </CardContent>
-            </Card>
-          )}
         </>
       )}
     </div>

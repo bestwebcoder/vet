@@ -47,7 +47,7 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
   }
 
   if (role === "none") {
-    revalidatePath("/admin/settings");
+    revalidatePath("/admin/team");
     return { status: "success", message: "Role removed." };
   }
 
@@ -112,7 +112,7 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
     return failure("team", grantError, "We could not grant that role just now. Please try again.");
   }
 
-  revalidatePath("/admin/settings");
+  revalidatePath("/admin/team");
   revalidatePath("/admin/doctors");
   revalidatePath("/admin/clients");
   return { status: "success", message: "Role updated." };
