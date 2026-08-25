@@ -198,7 +198,12 @@ async function ensureRow(table, match, values) {
   const query = db.from(table).select("id");
   for (const [column, value] of Object.entries(match)) query.eq(column, value);
 
-  const { data: existing } = await query.maybeSingle();
+  // A `match` that isn't actually unique for this table returns more than one
+  // row here rather than the single intended one — surface that immediately
+  // instead of silently falling through to an insert that then races or
+  // collides with the row(s) already there.
+  const { data: existing, error: lookupError } = await query.maybeSingle();
+  if (lookupError) throw lookupError;
   if (existing) return existing.id;
 
   const { data, error } = await db
@@ -211,8 +216,149 @@ async function ensureRow(table, match, values) {
   return data.id;
 }
 
+// -----------------------------------------------------------------------
+// Bulk-generation pools — deterministic (index-based, no Math.random), so a
+// re-run of this script produces the exact same names, emails and phone
+// numbers and ensureUser/ensureRow keep matching the same rows instead of
+// drifting into duplicates.
+// -----------------------------------------------------------------------
+
+const FIRST_NAMES_MALE = [
+  "Rahim", "Karim", "Jahid", "Faruk", "Nayeem", "Rakib", "Shamim", "Anwar", "Habib", "Mizan",
+  "Sohel", "Kamal", "Jamal", "Selim", "Anisur", "Rafiq", "Zahid", "Masud", "Imtiaz", "Nasir",
+  "Shakil", "Amirul", "Delwar", "Enamul", "Golam", "Hasan", "Ibrahim", "Joynal", "Kabir", "Liton",
+];
+const FIRST_NAMES_FEMALE = [
+  "Shirin", "Farhana", "Nasrin", "Salma", "Ruma", "Ayesha", "Nadia", "Sharmin", "Rina", "Poly",
+  "Moushumi", "Tania", "Shathi", "Laila", "Rupa", "Jesmin", "Kohinoor", "Momena", "Rokeya", "Parvin",
+  "Shahnaz", "Dilruba", "Israt", "Mahmuda", "Nazma", "Rehana", "Sultana", "Taslima", "Yasmin", "Zerin",
+];
+const LAST_NAMES = [
+  "Hossain", "Rahman", "Islam", "Khan", "Ahmed", "Chowdhury", "Akter", "Karim", "Uddin", "Alam",
+  "Miah", "Sarkar", "Talukder", "Molla", "Sheikh", "Bhuiyan", "Haque", "Kabir", "Siddique", "Mahmud",
+];
+const CITIES = [
+  "Dhaka", "Chattogram", "Khulna", "Rajshahi", "Sylhet", "Barishal",
+  "Rangpur", "Mymensingh", "Comilla", "Narayanganj", "Gazipur", "Bogura",
+];
+const DOCTOR_SPECIALIZATIONS = [
+  "Small animal medicine", "Surgery", "Dermatology", "Internal medicine", "Orthopedics",
+  "Avian & exotic medicine", "Cardiology", "Dentistry", "Ophthalmology", "Nutrition",
+  "Anesthesiology", "Radiology", "Emergency & critical care", "Theriogenology (reproduction)",
+];
+const PET_NAMES = [
+  "Tiger", "Lucy", "Max", "Bella", "Charlie", "Rocky", "Coco", "Simba", "Leo", "Milo",
+  "Luna", "Kitty", "Jerry", "Rex", "Bruno", "Daisy", "Shadow", "Snowy", "Buddy", "Sheru",
+  "Angel", "Lily", "Oscar", "Bailey", "Duke", "Zara", "Chester", "Ginger", "Whiskers", "Cookie",
+  "Tiny", "Bagira", "Nemo", "Pepper", "Rani", "Raja", "Mona", "Jack", "Bono", "Sultan",
+];
+const PET_COLOURS = [
+  "Golden", "Black", "White", "Brown", "Brown tabby", "Black and white",
+  "Grey", "Cream", "Fawn", "Brindle", "Orange", "Tricolor",
+];
+const DOG_BREEDS = [
+  "Desi / Local", "Labrador Retriever", "Golden Retriever", "German Shepherd", "Beagle",
+  "Pug", "Dachshund", "Rottweiler", "Siberian Husky", "Shih Tzu", "Mixed breed", "Indian Spitz",
+];
+const CAT_BREEDS = ["Desi / Local", "Domestic Shorthair", "Persian", "Siamese", "Turkish Angora", "Ragdoll", "Mixed breed"];
+const RABBIT_BREEDS = ["Local", "Dutch", "Lionhead", "Angora"];
+const BIRD_BREEDS = ["Budgerigar", "Cockatiel", "African Grey", "Java Sparrow"];
+const PET_SPECIES_CYCLE = ["dog", "dog", "cat", "dog", "cat", "dog", "cat", "rabbit", "dog", "cat", "bird", "dog"];
+
+function fullName(index, genderPool) {
+  const first = genderPool[index % genderPool.length];
+  const last = LAST_NAMES[(index * 7 + 3) % LAST_NAMES.length];
+  return `${first} ${last}`;
+}
+
+function bulkPhone(block, index) {
+  return `+8801${block}${String(index).padStart(6, "0")}`;
+}
+
+function breedFor(species, index) {
+  const pool = species === "dog" ? DOG_BREEDS : species === "cat" ? CAT_BREEDS : species === "rabbit" ? RABBIT_BREEDS : BIRD_BREEDS;
+  return pool[index % pool.length];
+}
+
+function weightKgFor(species, index) {
+  switch (species) {
+    case "dog":
+      return 8 + (index % 20);
+    case "cat":
+      return 2.5 + (index % 5) * 0.6;
+    case "rabbit":
+      return 1 + (index % 3) * 0.5;
+    case "bird":
+      return 0.08 + (index % 3) * 0.03;
+    default:
+      return 5;
+  }
+}
+
+/** 30 admins total: one named "hero" account plus 29 generated. */
+function generateAdmins(count) {
+  return Array.from({ length: count }, (_, i) => {
+    const idx = i + 2; // named admin is conceptually #1
+    const pool = idx % 2 === 0 ? FIRST_NAMES_FEMALE : FIRST_NAMES_MALE;
+    return {
+      email: `demo.admin${idx}@${DOMAIN}`,
+      name: fullName(idx + 50, pool),
+      phone: bulkPhone("712", idx),
+    };
+  });
+}
+
+/** 30 doctors total: two named "hero" accounts plus 28 generated. */
+function generateDoctors(count) {
+  return Array.from({ length: count }, (_, i) => {
+    const idx = i + 3; // named doctors are #1 and #2
+    const pool = idx % 3 === 0 ? FIRST_NAMES_FEMALE : FIRST_NAMES_MALE;
+    return {
+      email: `demo.doctor${idx}@${DOMAIN}`,
+      name: `Dr. ${fullName(idx, pool)}`,
+      phone: bulkPhone("713", idx),
+      registration: `BVC-${5000 + idx}`,
+      specialization: DOCTOR_SPECIALIZATIONS[idx % DOCTOR_SPECIALIZATIONS.length],
+    };
+  });
+}
+
+/** 30 clients total: two named "hero" accounts, one walk-in, plus 27 generated. */
+function generateClients(count) {
+  let petCursor = 0;
+  return Array.from({ length: count }, (_, i) => {
+    const idx = i + 3; // named clients are #1 and #2
+    const pool = idx % 2 === 0 ? FIRST_NAMES_FEMALE : FIRST_NAMES_MALE;
+    const petCount = idx % 2 === 0 ? 2 : 1;
+    const pets = Array.from({ length: petCount }, () => {
+      const p = petCursor++;
+      const species = PET_SPECIES_CYCLE[p % PET_SPECIES_CYCLE.length];
+      return {
+        name: PET_NAMES[p % PET_NAMES.length],
+        species,
+        breed: breedFor(species, p),
+        sex: p % 2 === 0 ? "male" : "female",
+        ageYears: 0.5 + (p % 10),
+        weightKg: weightKgFor(species, p),
+        colour: PET_COLOURS[p % PET_COLOURS.length],
+      };
+    });
+
+    return {
+      email: `demo.client${idx}@${DOMAIN}`,
+      name: fullName(idx + 20, pool),
+      phone: bulkPhone("714", idx),
+      city: CITIES[idx % CITIES.length],
+      pets,
+    };
+  });
+}
+
 const PEOPLE = {
-  admin: { email: `demo.admin@${DOMAIN}`, name: "Shirin Akter", phone: "+8801711000101" },
+  admins: [
+    { email: `demo.admin@${DOMAIN}`, name: "Shirin Akter", phone: "+8801711000101" },
+    ...generateAdmins(29),
+  ],
   doctors: [
     {
       email: `demo.doctor@${DOMAIN}`,
@@ -228,6 +374,7 @@ const PEOPLE = {
       registration: "BVC-3410",
       specialization: "Surgery",
     },
+    ...generateDoctors(28),
   ],
   staff: { email: `demo.staff@${DOMAIN}`, name: "Md. Sabbir Ahmed", phone: "+8801711000301" },
   clients: [
@@ -274,6 +421,7 @@ const PEOPLE = {
         },
       ],
     },
+    ...generateClients(27),
   ],
   // No login: reception can hold a record for someone who has never registered.
   walkIn: {
@@ -352,8 +500,15 @@ async function main() {
     { name: "Uttara", city: "Dhaka", is_primary: false },
   );
 
-  const admin = await ensureUser(PEOPLE.admin.email, PEOPLE.admin.name, PEOPLE.admin.phone);
-  await ensureRole(admin.id, "admin", organizationId);
+  // PEOPLE.admins[0] is the named "hero" account used for created_by/recorded_by
+  // below and printed at the end; the rest are generated for volume.
+  const adminUsers = [];
+  for (const person of PEOPLE.admins) {
+    const user = await ensureUser(person.email, person.name, person.phone);
+    await ensureRole(user.id, "admin", organizationId);
+    adminUsers.push(user);
+  }
+  const admin = adminUsers[0];
 
   // Saturday–Thursday, per the Bangladeshi work week; Friday (5) is the
   // weekly holiday. Postgres's date_part('dow') numbering: 0 = Sunday.
@@ -364,7 +519,7 @@ async function main() {
   for (const [index, doctor] of PEOPLE.doctors.entries()) {
     const user = await ensureUser(doctor.email, doctor.name, doctor.phone);
     await ensureRole(user.id, "doctor", organizationId);
-    const branchId = index === 0 ? mainBranch.id : uttaraId;
+    const branchId = index % 2 === 0 ? mainBranch.id : uttaraId;
     const doctorId = await ensureRow(
       "doctors",
       { user_id: user.id, organization_id: organizationId },
@@ -474,7 +629,13 @@ async function main() {
         colourIndex: petPhotoColour++,
       });
 
-      petRecords.push({ id: petId, clientId, name: pet.name });
+      petRecords.push({
+        id: petId,
+        clientId,
+        name: pet.name,
+        species: pet.species,
+        weightGrams: Math.round(pet.weightKg * 1000),
+      });
     }
   }
 
@@ -515,6 +676,7 @@ async function main() {
   // SERVICE_PRICES_TAKA above for why this belongs here and not in a
   // migration. Only fills in a price an admin has not already set by hand.
   const serviceRecords = {};
+  const servicePricePaisa = {};
   for (const [name, taka] of Object.entries(SERVICE_PRICES_TAKA)) {
     const { data: service } = await db
       .from("services")
@@ -532,6 +694,7 @@ async function main() {
     }
 
     serviceRecords[name] = service.id;
+    servicePricePaisa[name] = service.price_paisa === 0 ? taka * 100 : service.price_paisa;
   }
 
   // ---------------------------------------------------------------------
@@ -611,14 +774,20 @@ async function main() {
     const endsAt = new Date(startsAt.getTime() + appt.durationMinutes * 60_000);
     const isHomeVisit = appt.visitType === "home";
 
-    // Matched on {pet, service, doctor} rather than the computed starts_at:
-    // every date here is relative to "now", so it drifts on a later re-run.
-    // Each demo appointment below is a unique (pet, service, doctor) triple,
-    // so this stays a stable identity across runs on different days —
-    // unlike starts_at, which would just create a fresh duplicate each day.
+    // Matched on {pet, service, doctor, reason} rather than the computed
+    // starts_at: every date here is relative to "now", so it drifts on a
+    // later re-run. reason is part of the match (not just a value) because
+    // the bulk visits below can otherwise land on the exact same (pet,
+    // service, doctor) triple as one of these — reason is what keeps this
+    // lookup a single row instead of an ambiguous one.
     const appointmentId = await ensureRow(
       "appointments",
-      { pet_id: appt.pet.id, service_id: serviceRecords[appt.service], doctor_id: appt.doctor.id },
+      {
+        pet_id: appt.pet.id,
+        service_id: serviceRecords[appt.service],
+        doctor_id: appt.doctor.id,
+        reason: `${appt.service} for ${appt.pet.name}`,
+      },
       {
         organization_id: organizationId,
         branch_id: isHomeVisit ? null : appt.doctor.branchId,
@@ -627,7 +796,6 @@ async function main() {
         status: appt.status,
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
-        reason: `${appt.service} for ${appt.pet.name}`,
         created_by: admin.id,
         ...(appt.status === "cancelled"
           ? { cancelled_at: startsAt.toISOString(), cancelled_by: admin.id, cancellation_reason: "Client rescheduled by phone." }
@@ -700,15 +868,334 @@ async function main() {
     }
   }
 
-  const counts = {};
-  for (const table of ["clients", "doctors", "staff", "branches", "pets", "appointments", "invoices"]) {
-    const { count } = await db
-      .from(table)
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .is("deleted_at", null);
-    counts[table] = count;
+  // ---------------------------------------------------------------------
+  // Bulk clinical activity — enough completed visits, vaccinations,
+  // deworming records, invoices and payments that every list, table and
+  // "due soon" dashboard card has real volume, not just the handful of
+  // named appointments above.
+  // ---------------------------------------------------------------------
+
+  const VACCINE_CATALOG = {
+    dog: ["Anti-rabies vaccine", "DHPPi (5-in-1)", "Leptospirosis"],
+    cat: ["Anti-rabies vaccine", "FVRCP (3-in-1)"],
+    rabbit: ["Anti-rabies vaccine"],
+    bird: ["Polyomavirus vaccine"],
+  };
+
+  const vaccinationScheduleId = {};
+  for (const [species, names] of Object.entries(VACCINE_CATALOG)) {
+    const { data: speciesRow } = await db.from("species").select("id").eq("slug", species).single();
+    for (const name of names) {
+      if (vaccinationScheduleId[name]) continue;
+      vaccinationScheduleId[name] = await ensureRow(
+        "vaccination_schedules",
+        { organization_id: organizationId, vaccine_name: name },
+        { species_id: speciesRow.id, interval_value: 1, interval_unit: "years", description: `${name} — annual booster` },
+      );
+    }
   }
+
+  const DEWORMING_PRODUCTS = [
+    { product: "Fenbendazole", activeIngredient: "Fenbendazole", dose: "50 mg/kg" },
+    { product: "Pyrantel Pamoate", activeIngredient: "Pyrantel pamoate", dose: "5 mg/kg" },
+    { product: "Drontal Plus", activeIngredient: "Praziquantel / Pyrantel / Febantel", dose: "1 tablet per 10 kg" },
+    { product: "Ivermectin", activeIngredient: "Ivermectin", dose: "0.2 mg/kg" },
+  ];
+
+  const BULK_VISIT_TYPES = ["clinic", "vaccination", "follow_up", "clinic", "emergency", "home", "clinic", "surgery"];
+  const PAYMENT_METHODS = ["cash", "bkash", "nagad", "bank_transfer", "card"];
+  const PAID_FRACTIONS = [1, 1, 0.5, 1, 0.6, 1, 1, 0.75, 1, 0];
+
+  function serviceForVisitType(visitType) {
+    switch (visitType) {
+      case "vaccination":
+        return "Vaccination";
+      case "follow_up":
+        return "Follow-up consultation";
+      case "emergency":
+        return "Emergency consultation";
+      case "home":
+        return "Home visit consultation";
+      case "surgery":
+        return "Surgery";
+      default:
+        return "General consultation";
+    }
+  }
+
+  // 09:00-13:00 and 14:00-18:00 in 30-minute slots, matching every doctor's
+  // seeded availability windows above.
+  const SLOT_TIMES = [
+    [9, 0], [9, 30], [10, 0], [10, 30], [11, 0], [11, 30], [12, 0], [12, 30],
+    [14, 0], [14, 30], [15, 0], [15, 30], [16, 0], [16, 30], [17, 0], [17, 30],
+  ];
+
+  const bookedSlots = new Set();
+  function nextFreeSlot(doctorId, dayOffset) {
+    for (const [h, m] of SLOT_TIMES) {
+      const key = `${doctorId}|${dayOffset}|${h}:${m}`;
+      if (bookedSlots.has(key)) continue;
+      bookedSlots.add(key);
+      const start = daysFromNow(dayOffset, h);
+      start.setUTCMinutes(m);
+      return start;
+    }
+    return null;
+  }
+
+  // Working days going back far enough for 40 completed visits, skipping
+  // Fridays — the weekly holiday, same as WORKING_WEEKDAYS above.
+  const pastWorkingDays = [];
+  for (let d = -1; pastWorkingDays.length < 60; d--) {
+    if (daysFromNow(d, 12).getUTCDay() !== 5) pastWorkingDays.push(d);
+  }
+  const futureWorkingDays = [];
+  for (let d = 1; futureWorkingDays.length < 20; d++) {
+    if (daysFromNow(d, 12).getUTCDay() !== 5) futureWorkingDays.push(d);
+  }
+
+  const COMPLETED_COUNT = 40;
+  const bulkCompleted = [];
+
+  for (let i = 0; i < COMPLETED_COUNT; i++) {
+    const doctor = doctorRecords[i % doctorRecords.length];
+    const pet = petRecords[i % petRecords.length];
+    const client = clientRecords.find((c) => c.id === pet.clientId);
+    const visitType = BULK_VISIT_TYPES[i % BULK_VISIT_TYPES.length];
+    const serviceName = serviceForVisitType(visitType);
+    const dayOffset = pastWorkingDays[i % pastWorkingDays.length];
+    const startsAt = nextFreeSlot(doctor.id, dayOffset);
+    const durationMinutes = visitType === "surgery" ? 90 : visitType === "vaccination" ? 15 : 30;
+    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+
+    // Tagged with a stable index in the match key (not starts_at, which
+    // drifts on a later re-run) so 40 distinct rows are created even where
+    // the same pet/doctor/service triple repeats across the cycle.
+    const appointmentId = await ensureRow(
+      "appointments",
+      { pet_id: pet.id, doctor_id: doctor.id, service_id: serviceRecords[serviceName], reason: `Bulk visit #${i + 1}` },
+      {
+        organization_id: organizationId,
+        branch_id: visitType === "home" ? null : doctor.branchId,
+        client_id: client.id,
+        visit_type: visitType,
+        status: "completed",
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        location: visitType === "home" ? `${client.name}'s residence` : null,
+        created_by: admin.id,
+      },
+    );
+
+    bulkCompleted.push({ id: appointmentId, pet, client, doctor, service: serviceName, startsAt });
+  }
+
+  // Vaccinations on the first 32, deworming from #8 onward (32 of 40) — an
+  // overlapping middle band gets both in the same visit, like a real
+  // check-up, while both tables individually clear 30 records.
+  for (const [i, appt] of bulkCompleted.entries()) {
+    const dateAdministered = appt.startsAt.toISOString().slice(0, 10);
+
+    if (i < 32) {
+      const vaccineNames = VACCINE_CATALOG[appt.pet.species] ?? VACCINE_CATALOG.dog;
+      const vaccineName = vaccineNames[i % vaccineNames.length];
+      // A third land within the next ten days so "due soon" dashboard cards
+      // have something real to show, not just dates a year out.
+      const nextDue =
+        i % 3 === 0
+          ? daysFromNow(-4 + (i % 12), 0).toISOString().slice(0, 10)
+          : daysFromNow(360 + (i % 20), 0).toISOString().slice(0, 10);
+
+      await ensureRow(
+        "vaccinations",
+        { appointment_id: appt.id },
+        {
+          pet_id: appt.pet.id,
+          organization_id: organizationId,
+          doctor_id: appt.doctor.id,
+          vaccination_schedule_id: vaccinationScheduleId[vaccineName] ?? null,
+          vaccine_name: vaccineName,
+          manufacturer: "MSD Animal Health",
+          batch_number: `B${1000 + i}`,
+          lot_number: `L${2000 + i}`,
+          expiry_date: daysFromNow(400, 0).toISOString().slice(0, 10),
+          date_administered: dateAdministered,
+          dose: "1 mL",
+          route: "subcutaneous",
+          site: "left hind limb",
+          next_due_date: nextDue,
+          created_by: admin.id,
+        },
+      );
+    }
+
+    if (i >= 8) {
+      const productDef = DEWORMING_PRODUCTS[i % DEWORMING_PRODUCTS.length];
+      const interval = ["monthly", "quarterly", "semi_annual"][i % 3];
+      const intervalDays = interval === "monthly" ? 30 : interval === "quarterly" ? 90 : 182;
+      const nextDue =
+        i % 4 === 0
+          ? daysFromNow(-2 + (i % 10), 0).toISOString().slice(0, 10)
+          : new Date(appt.startsAt.getTime() + intervalDays * 86_400_000).toISOString().slice(0, 10);
+
+      await ensureRow(
+        "deworming_records",
+        { appointment_id: appt.id },
+        {
+          pet_id: appt.pet.id,
+          organization_id: organizationId,
+          doctor_id: appt.doctor.id,
+          product: productDef.product,
+          active_ingredient: productDef.activeIngredient,
+          dose: productDef.dose,
+          route: "oral",
+          weight_grams: appt.pet.weightGrams,
+          date_administered: dateAdministered,
+          interval,
+          next_due_date: nextDue,
+          created_by: admin.id,
+        },
+      );
+    }
+  }
+
+  // One invoice per completed bulk visit (billing), a payment on all but
+  // every tenth one (a few stay unpaid/partial so /admin/billing shows
+  // every status, not just "paid").
+  for (const [i, appt] of bulkCompleted.entries()) {
+    const unitPricePaisa = servicePricePaisa[appt.service];
+
+    const invoiceId = await ensureRow(
+      "invoices",
+      { appointment_id: appt.id },
+      {
+        organization_id: organizationId,
+        client_id: appt.client.id,
+        pet_id: appt.pet.id,
+        status: "issued",
+        issued_at: appt.startsAt.toISOString(),
+        due_date: new Date(appt.startsAt.getTime() + 7 * 86_400_000).toISOString().slice(0, 10),
+        created_by: admin.id,
+      },
+    );
+
+    await ensureRow(
+      "invoice_items",
+      { invoice_id: invoiceId },
+      {
+        service_id: serviceRecords[appt.service],
+        description: `${appt.service} — ${appt.pet.name}`,
+        quantity: 1,
+        unit_price_paisa: unitPricePaisa,
+        tax_rate_percent: SERVICE_TAX_RATE_PERCENT,
+        line_total_paisa: unitPricePaisa,
+      },
+    );
+
+    const taxPaisa = Math.round((unitPricePaisa * SERVICE_TAX_RATE_PERCENT) / 100);
+    const totalPaisa = unitPricePaisa + taxPaisa;
+    const amountPaisa = Math.round(totalPaisa * PAID_FRACTIONS[i % PAID_FRACTIONS.length]);
+
+    if (amountPaisa > 0) {
+      await ensureRow(
+        "payments",
+        { invoice_id: invoiceId },
+        {
+          organization_id: organizationId,
+          amount_paisa: amountPaisa,
+          method: PAYMENT_METHODS[i % PAYMENT_METHODS.length],
+          paid_at: new Date(appt.startsAt.getTime() + 60 * 60_000).toISOString(),
+          recorded_by: admin.id,
+        },
+      );
+    }
+  }
+
+  // A dozen upcoming appointments (requested/confirmed) so the calendar and
+  // "today's appointments" views have future visits, not just history.
+  const UPCOMING_STATUSES = ["requested", "confirmed", "confirmed", "requested"];
+  const UPCOMING_COUNT = 12;
+
+  for (let i = 0; i < UPCOMING_COUNT; i++) {
+    const doctor = doctorRecords[(i + 5) % doctorRecords.length];
+    const pet = petRecords[(i + 3) % petRecords.length];
+    const client = clientRecords.find((c) => c.id === pet.clientId);
+    const visitType = BULK_VISIT_TYPES[(i + 2) % BULK_VISIT_TYPES.length];
+    const serviceName = serviceForVisitType(visitType);
+    const dayOffset = futureWorkingDays[i % futureWorkingDays.length];
+    const startsAt = nextFreeSlot(doctor.id, dayOffset);
+    const durationMinutes = visitType === "surgery" ? 90 : 30;
+    const endsAt = new Date(startsAt.getTime() + durationMinutes * 60_000);
+
+    await ensureRow(
+      "appointments",
+      { pet_id: pet.id, doctor_id: doctor.id, service_id: serviceRecords[serviceName], reason: `Upcoming visit #${i + 1}` },
+      {
+        organization_id: organizationId,
+        branch_id: visitType === "home" ? null : doctor.branchId,
+        client_id: client.id,
+        visit_type: visitType,
+        status: UPCOMING_STATUSES[i % UPCOMING_STATUSES.length],
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        created_by: admin.id,
+      },
+    );
+  }
+
+  // A few cancelled/no-show visits so the calendar's colour coding has every
+  // state represented.
+  const INACTIVE_VISITS = [
+    { status: "cancelled", offsetBack: 20 },
+    { status: "cancelled", offsetBack: 33 },
+    { status: "no_show", offsetBack: 15 },
+    { status: "no_show", offsetBack: 27 },
+  ];
+
+  for (const [i, spec] of INACTIVE_VISITS.entries()) {
+    const doctor = doctorRecords[i % doctorRecords.length];
+    const pet = petRecords[(i + 6) % petRecords.length];
+    const client = clientRecords.find((c) => c.id === pet.clientId);
+    const dayOffset = -spec.offsetBack;
+    const startsAt = nextFreeSlot(doctor.id, dayOffset);
+    if (!startsAt) continue;
+    const endsAt = new Date(startsAt.getTime() + 30 * 60_000);
+
+    await ensureRow(
+      "appointments",
+      { pet_id: pet.id, doctor_id: doctor.id, service_id: serviceRecords["General consultation"], reason: `Inactive visit #${i + 1}` },
+      {
+        organization_id: organizationId,
+        branch_id: doctor.branchId,
+        client_id: client.id,
+        visit_type: "clinic",
+        status: spec.status,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        created_by: admin.id,
+        ...(spec.status === "cancelled"
+          ? { cancelled_at: startsAt.toISOString(), cancelled_by: admin.id, cancellation_reason: "Client rescheduled by phone." }
+          : {}),
+      },
+    );
+  }
+
+  const TABLES_WITHOUT_SOFT_DELETE = new Set(["payments"]);
+  async function countRows(table) {
+    let query = db.from(table).select("*", { count: "exact", head: true }).eq("organization_id", organizationId);
+    if (!TABLES_WITHOUT_SOFT_DELETE.has(table)) query = query.is("deleted_at", null);
+    const { count } = await query;
+    return count;
+  }
+
+  const counts = {};
+  for (const table of [
+    "doctors", "staff", "clients", "pets", "appointments",
+    "invoices", "payments", "vaccinations", "deworming_records",
+  ]) {
+    counts[table] = await countRows(table);
+  }
+  counts.admins = adminUsers.length;
 
   console.log(`\nSeeded ${organization.name}:`);
   console.table(counts);
@@ -716,11 +1203,18 @@ async function main() {
   console.log(`Sign in at http://localhost:3000/login — password for every demo account:\n`);
   console.log(`  ${PASSWORD}\n`);
   console.table([
-    { role: "Admin", email: PEOPLE.admin.email },
-    ...PEOPLE.doctors.map((doctor) => ({ role: "Doctor", email: doctor.email })),
-    ...PEOPLE.clients.map((client) => ({ role: "Client", email: client.email })),
+    { role: "Admin", email: PEOPLE.admins[0].email },
+    { role: "Doctor", email: PEOPLE.doctors[0].email },
+    { role: "Doctor", email: PEOPLE.doctors[1].email },
+    { role: "Client", email: PEOPLE.clients[0].email },
+    { role: "Client", email: PEOPLE.clients[1].email },
     { role: "Staff (no role granted)", email: PEOPLE.staff.email },
   ]);
+  console.log(
+    `...plus ${PEOPLE.admins.length - 1} more admins, ${PEOPLE.doctors.length - 2} more doctors and ` +
+      `${PEOPLE.clients.length - 2} more clients — same password, emails follow the ` +
+      `demo.<role><N>@${DOMAIN} pattern.\n`,
+  );
   console.log(
     "The staff account has no role on purpose: it shows what an account looks like\n" +
       "before an administrator grants access.\n",
