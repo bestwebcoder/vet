@@ -10,7 +10,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
-import { listAppointments, listAppointmentsPaginated, listAppointmentStatuses } from "@/features/appointments/queries";
+import { listAppointmentsPaginated, listAppointmentStatuses } from "@/features/appointments/queries";
 import { listDoctors } from "@/features/doctors/queries";
 
 export const metadata: Metadata = { title: "Appointments · TV Care" };
@@ -19,16 +19,24 @@ export default async function AdminAppointmentsPage({
   searchParams,
 }: PageProps<"/admin/appointments">) {
   await requireRole("admin", "super_admin");
-  const { doctorId: doctorIdParam, from, to, page: pageParam } = await searchParams;
+  const { doctorId: doctorIdParam, from, to, page: pageParam, upcomingPage: upcomingPageParam } = await searchParams;
   const doctorId = typeof doctorIdParam === "string" && doctorIdParam ? doctorIdParam : undefined;
   const from_ = typeof from === "string" ? from : undefined;
   const to_ = typeof to === "string" ? to : undefined;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
+  const upcomingPage = typeof upcomingPageParam === "string" ? Number(upcomingPageParam) || 1 : 1;
 
   const now = new Date().toISOString();
 
   const [upcoming, past, statuses, doctors] = await Promise.all([
-    listAppointments({ doctorId, from: now, excludeStatuses: ["cancelled", "no_show"], order: "asc" }),
+    listAppointmentsPaginated({
+      doctorId,
+      from: now,
+      excludeStatuses: ["cancelled", "no_show"],
+      order: "asc",
+      page: upcomingPage,
+      pageSize: 25,
+    }),
     listAppointmentsPaginated({ doctorId, from: from_, to: to_, page }),
     listAppointmentStatuses(),
     listDoctors(),
@@ -72,17 +80,32 @@ export default async function AdminAppointmentsPage({
         <CardHeader>
           <CardTitle className="text-base">Upcoming</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {upcoming.status === "error" ? (
             <ErrorState title="Upcoming appointments could not be loaded" />
           ) : (
-            <AppointmentList
-              appointments={upcoming.data}
-              statuses={statuses}
-              basePath="/admin/appointments"
-              audience="admin"
-              emptyTitle="No upcoming appointments"
-            />
+            <>
+              <AppointmentList
+                appointments={upcoming.data}
+                statuses={statuses}
+                basePath="/admin/appointments"
+                audience="admin"
+                emptyTitle="No upcoming appointments"
+              />
+              <Pagination
+                basePath="/admin/appointments"
+                searchParams={{
+                  doctorId,
+                  from: from_,
+                  to: to_,
+                  page: page > 1 ? String(page) : undefined,
+                }}
+                page={upcoming.page}
+                pageSize={upcoming.pageSize}
+                totalCount={upcoming.totalCount}
+                pageParam="upcomingPage"
+              />
+            </>
           )}
         </CardContent>
       </Card>
@@ -107,7 +130,12 @@ export default async function AdminAppointmentsPage({
               />
               <Pagination
                 basePath="/admin/appointments"
-                searchParams={{ doctorId, from: from_, to: to_ }}
+                searchParams={{
+                  doctorId,
+                  from: from_,
+                  to: to_,
+                  upcomingPage: upcomingPage > 1 ? String(upcomingPage) : undefined,
+                }}
                 page={past.page}
                 pageSize={past.pageSize}
                 totalCount={past.totalCount}

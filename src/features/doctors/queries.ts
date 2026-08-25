@@ -41,6 +41,9 @@ export type DoctorSummary = {
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 const DOCTOR_COLUMNS = `
   id, user_id, organization_id, primary_branch_id, specialization, registration_number,
@@ -147,22 +150,28 @@ export async function getOwnDoctorRecord(): Promise<Result<DoctorSummary | null>
 }
 
 /** The doctor-management screen: every doctor, active or deactivated. */
-export async function listDoctorsForAdmin(includeInactive = false): Promise<Result<DoctorSummary[]>> {
+export async function listDoctorsForAdmin(
+  includeInactive = false,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<PaginatedResult<DoctorSummary>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
+  const start = (page - 1) * pageSize;
 
-  let query = supabase.from("doctors").select(DOCTOR_COLUMNS).order("id");
+  let query = supabase.from("doctors").select(DOCTOR_COLUMNS, { count: "exact" }).order("id").range(start, start + pageSize - 1);
   if (!includeInactive) {
     query = query.is("deleted_at", null);
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error) {
     console.error("[doctors] admin list failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toSummary) };
+  return { status: "ok", data: (data ?? []).map(toSummary), totalCount: count ?? 0, page, pageSize };
 }
 
 export type PublicDoctor = {

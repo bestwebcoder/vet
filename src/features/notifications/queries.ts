@@ -5,6 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 /** Reads for the client preferences page and the admin monitoring view. */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 export type { NotificationType } from "@/lib/notifications/catalog";
 
@@ -72,21 +75,29 @@ function toFailedNotification(row: any): FailedNotification {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /** Admin monitoring view (DoD: "failed sends... surface in an admin view"). */
-export async function getFailedNotifications(organizationId: string): Promise<Result<FailedNotification[]>> {
+export async function getFailedNotifications(
+  organizationId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<PaginatedResult<FailedNotification>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
 
-  const { data, error } = await supabase
+  const start = (page - 1) * pageSize;
+  const { data, error, count } = await supabase
     .from("notifications")
-    .select("id, type, channel, title, retry_count, failure_reason, scheduled_for, created_at, recipient:users (full_name)")
+    .select("id, type, channel, title, retry_count, failure_reason, scheduled_for, created_at, recipient:users (full_name)", {
+      count: "exact",
+    })
     .eq("organization_id", organizationId)
     .eq("status", "failed")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(start, start + pageSize - 1);
 
   if (error) {
     console.error("[notifications] failed list read failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toFailedNotification) };
+  return { status: "ok", data: (data ?? []).map(toFailedNotification), totalCount: count ?? 0, page, pageSize };
 }

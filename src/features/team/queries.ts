@@ -14,6 +14,9 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 export type TeamRole = "admin" | "none";
 
@@ -34,7 +37,35 @@ function one(value: Related): UserProfile | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
-export async function getTeamRoster(organizationId: string): Promise<Result<TeamMember[]>> {
+/**
+ * Paginated over a JS-merged array, not a single `.range()` query: the
+ * roster is a union of two different tables (active admins, pending staff)
+ * with different filters each, so there is no one query to page against.
+ * Both halves are practice-scale on their own (admins and staff, not
+ * patients), so fetching each in full and slicing the merged, sorted result
+ * is simple and still gives a real ceiling — unlike the unpaginated version
+ * this replaces, which rendered everyone on one page.
+ */
+export async function getTeamRoster(
+  organizationId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<PaginatedResult<TeamMember>> {
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
+  const result = await getFullTeamRoster(organizationId);
+  if (result.status === "error") return result;
+
+  const start = (page - 1) * pageSize;
+  return {
+    status: "ok",
+    data: result.data.slice(start, start + pageSize),
+    totalCount: result.data.length,
+    page,
+    pageSize,
+  };
+}
+
+async function getFullTeamRoster(organizationId: string): Promise<Result<TeamMember[]>> {
   const supabase = await createClient();
 
   const [{ data: roleRows, error: roleError }, { data: staffRows, error: staffError }] = await Promise.all([

@@ -95,18 +95,38 @@ function toDetail(row: any): PetDetail {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
-/** Patients the caller may see, newest first. Optionally for one owner. */
+/**
+ * Patients the caller may see, newest first. Optionally for one owner.
+ *
+ * Always page-shaped: callers that never pass `page` still get page 1 of
+ * `pageSize` (default 100, or `limit` for older call sites) — the same rows
+ * they always got, just with `totalCount`/`page`/`pageSize` alongside for
+ * callers (the admin patients list) that want to page through the rest.
+ */
 export async function listPets(
-  options: { clientId?: string; search?: string; limit?: number; includeInactive?: boolean } = {},
-): Promise<Result<PetDetail[]>> {
+  options: {
+    clientId?: string;
+    search?: string;
+    limit?: number;
+    includeInactive?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<PaginatedResult<PetDetail>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? options.limit ?? 100;
+  const start = (page - 1) * pageSize;
 
   let query = supabase
     .from("pets")
-    .select(PET_COLUMNS)
+    .select(PET_COLUMNS, { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(options.limit ?? 100);
+    .range(start, start + pageSize - 1);
 
   if (!options.includeInactive) {
     query = query.is("deleted_at", null);
@@ -148,14 +168,14 @@ export async function listPets(
     );
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error) {
     console.error("[pets] list failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toDetail) };
+  return { status: "ok", data: (data ?? []).map(toDetail), totalCount: count ?? 0, page, pageSize };
 }
 
 export async function getPet(

@@ -25,6 +25,9 @@ export type ClientDetail = ClientSummary & {
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 const CLIENT_COLUMNS = `
   id, user_id, organization_id, full_name, phone, alternate_phone, email,
@@ -86,11 +89,24 @@ export async function getOwnClientRecord(): Promise<Result<ClientDetail | null>>
  * a record stored as "+8801712345678".
  */
 export async function listClients(
-  options: { search?: string; limit?: number; includeInactive?: boolean } = {},
-): Promise<Result<ClientDetail[]>> {
+  options: {
+    search?: string;
+    limit?: number;
+    includeInactive?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<PaginatedResult<ClientDetail>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? options.limit ?? 50;
+  const start = (page - 1) * pageSize;
 
-  let query = supabase.from("clients").select(CLIENT_COLUMNS).order("full_name").limit(options.limit ?? 50);
+  let query = supabase
+    .from("clients")
+    .select(CLIENT_COLUMNS, { count: "exact" })
+    .order("full_name")
+    .range(start, start + pageSize - 1);
 
   // Day-to-day pickers (new patient, patient search) only ever want active
   // clients; the admin client-management screen opts into seeing everyone so
@@ -116,14 +132,14 @@ export async function listClients(
     );
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error) {
     console.error("[clients] list failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toDetail) };
+  return { status: "ok", data: (data ?? []).map(toDetail), totalCount: count ?? 0, page, pageSize };
 }
 
 /**

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { InviteTeamMemberDialog } from "@/components/team/invite-team-member-dialog";
 import { RemovedTeamMembers } from "@/components/team/removed-team-members";
 import { TeamRosterTable } from "@/components/team/team-roster-table";
+import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
@@ -10,9 +11,11 @@ import { getRemovedTeamMembers, getTeamRoster } from "@/features/team/queries";
 
 export const metadata: Metadata = { title: "Team · TV Care" };
 
-export default async function AdminTeamPage() {
+export default async function AdminTeamPage({ searchParams }: PageProps<"/admin/team">) {
   const user = await requireRole("admin", "super_admin");
   const organizationId = user.organizationIds[0];
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   if (!organizationId) {
     return (
@@ -23,7 +26,10 @@ export default async function AdminTeamPage() {
     );
   }
 
-  const [team, removed] = await Promise.all([getTeamRoster(organizationId), getRemovedTeamMembers(organizationId)]);
+  const [team, removed] = await Promise.all([
+    getTeamRoster(organizationId, { page }),
+    getRemovedTeamMembers(organizationId),
+  ]);
 
   return (
     <div className="grid gap-6">
@@ -47,8 +53,15 @@ export default async function AdminTeamPage() {
         </Card>
       ) : (
         <Card>
-          <CardContent>
+          <CardContent className="grid gap-4">
             <TeamRosterTable members={team.data} />
+            <Pagination
+              basePath="/admin/team"
+              searchParams={{}}
+              page={team.page}
+              pageSize={team.pageSize}
+              totalCount={team.totalCount}
+            />
           </CardContent>
         </Card>
       )}

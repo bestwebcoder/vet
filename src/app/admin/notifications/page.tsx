@@ -4,6 +4,7 @@ import { FailedNotificationsList } from "@/components/notifications/failed-notif
 import { ProcessNowButton } from "@/components/notifications/process-now-button";
 import { QuietHoursForm } from "@/components/notifications/quiet-hours-form";
 import { TemplateEditor } from "@/components/notifications/template-editor";
+import { Pagination } from "@/components/search/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getFailedNotifications } from "@/features/notifications/queries";
@@ -12,9 +13,11 @@ import { getOwnOrganization } from "@/features/organizations/queries";
 
 export const metadata: Metadata = { title: "Notifications · TV Care" };
 
-export default async function AdminNotificationsPage() {
+export default async function AdminNotificationsPage({ searchParams }: PageProps<"/admin/notifications">) {
   const user = await requireRole("admin", "super_admin");
   const organizationId = user.organizationIds[0];
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   if (!organizationId) {
     return (
@@ -28,7 +31,7 @@ export default async function AdminNotificationsPage() {
   const [organizationResult, templatesResult, failedResult] = await Promise.all([
     getOwnOrganization(organizationId),
     getTemplates(organizationId),
-    getFailedNotifications(organizationId),
+    getFailedNotifications(organizationId, { page }),
   ]);
 
   return (
@@ -69,6 +72,15 @@ export default async function AdminNotificationsPage() {
       </Card>
 
       <FailedNotificationsList notifications={failedResult.status === "ok" ? failedResult.data : []} />
+      {failedResult.status === "ok" ? (
+        <Pagination
+          basePath="/admin/notifications"
+          searchParams={{}}
+          page={failedResult.page}
+          pageSize={failedResult.pageSize}
+          totalCount={failedResult.totalCount}
+        />
+      ) : null}
     </div>
   );
 }

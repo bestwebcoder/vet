@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PatientList } from "@/components/pets/patient-list";
+import { Pagination } from "@/components/search/pagination";
 import { SearchField } from "@/components/search/search-field";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,12 +16,13 @@ export const metadata: Metadata = { title: "Patients · TV Care" };
 export default async function AdminPatientsPage({ searchParams }: PageProps<"/admin/patients">) {
   await requireRole("admin", "super_admin");
 
-  const { q, show } = await searchParams;
+  const { q, show, page: pageParam } = await searchParams;
   const search = typeof q === "string" ? q : undefined;
   const includeInactive = show === "all";
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   const [pets, clients] = await Promise.all([
-    listPets({ search, includeInactive }),
+    listPets({ search, includeInactive, page, pageSize: 25 }),
     listClients({ limit: 500 }),
   ]);
 
@@ -66,16 +68,25 @@ export default async function AdminPatientsPage({ searchParams }: PageProps<"/ad
       </div>
 
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {pets.status === "error" ? (
             <ErrorState title="Patients could not be loaded" />
           ) : (
-            <PatientList
-              pets={pets.data}
-              basePath="/admin/patients"
-              ownerNames={ownerNames}
-              search={search}
-            />
+            <>
+              <PatientList
+                pets={pets.data}
+                basePath="/admin/patients"
+                ownerNames={ownerNames}
+                search={search}
+              />
+              <Pagination
+                basePath="/admin/patients"
+                searchParams={{ q: search, show: includeInactive ? "all" : undefined }}
+                page={pets.page}
+                pageSize={pets.pageSize}
+                totalCount={pets.totalCount}
+              />
+            </>
           )}
         </CardContent>
       </Card>

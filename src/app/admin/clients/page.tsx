@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ClientList } from "@/components/clients/client-list";
+import { Pagination } from "@/components/search/pagination";
 import { SearchField } from "@/components/search/search-field";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
@@ -15,9 +16,10 @@ export const metadata: Metadata = { title: "Clients · TV Care" };
 export default async function AdminClientsPage({ searchParams }: PageProps<"/admin/clients">) {
   await requireRole("admin", "super_admin");
 
-  const { q } = await searchParams;
+  const { q, page: pageParam } = await searchParams;
   const search = typeof q === "string" ? q : undefined;
-  const result = await listClients({ search, includeInactive: true });
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
+  const result = await listClients({ search, includeInactive: true, page, pageSize: 25 });
 
   return (
     <div className="grid gap-6">
@@ -44,11 +46,20 @@ export default async function AdminClientsPage({ searchParams }: PageProps<"/adm
       />
 
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {result.status === "error" ? (
             <ErrorState title="Clients could not be loaded" />
           ) : (
-            <ClientList clients={result.data} basePath="/admin/clients" search={search} />
+            <>
+              <ClientList clients={result.data} basePath="/admin/clients" search={search} />
+              <Pagination
+                basePath="/admin/clients"
+                searchParams={{ q: search }}
+                page={result.page}
+                pageSize={result.pageSize}
+                totalCount={result.totalCount}
+              />
+            </>
           )}
         </CardContent>
       </Card>
