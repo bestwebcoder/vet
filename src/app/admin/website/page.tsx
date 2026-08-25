@@ -1,11 +1,16 @@
+import { Plus } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteContentEditor } from "@/components/organizations/site-content-editor";
+import { SitePagesList } from "@/components/site-pages/site-pages-list";
 import { ErrorState } from "@/components/states/error-state";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getOwnOrganization } from "@/features/organizations/queries";
 import { getSiteContentForAdmin } from "@/features/site-content/queries";
+import { listSitePagesForAdmin } from "@/features/site-pages/queries";
 
 export const metadata: Metadata = { title: "Website · TV Care" };
 
@@ -22,9 +27,10 @@ export default async function AdminWebsitePage() {
     );
   }
 
-  const [organization, siteContent] = await Promise.all([
+  const [organization, siteContent, sitePages] = await Promise.all([
     getOwnOrganization(organizationId),
     getSiteContentForAdmin(organizationId),
+    listSitePagesForAdmin(organizationId),
   ]);
 
   const practiceName = organization.status === "ok" ? (organization.data?.name ?? "The Traveling Vet") : "The Traveling Vet";
@@ -48,6 +54,28 @@ export default async function AdminWebsitePage() {
             <SiteContentEditor content={siteContent.data} practiceName={practiceName} />
           ) : (
             <ErrorState title="Website content could not be loaded" />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0">
+          <div className="grid gap-1.5">
+            <CardTitle className="text-base">Custom pages</CardTitle>
+            <CardDescription>
+              Pages beyond the four above, built from blocks — text, images, section headings and columns.
+            </CardDescription>
+          </div>
+          <Link href="/admin/website/pages/new" className={buttonVariants({ size: "touch" })}>
+            <Plus aria-hidden />
+            New page
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {sitePages.status === "ok" ? (
+            <SitePagesList pages={sitePages.data} />
+          ) : (
+            <ErrorState title="Custom pages could not be loaded" />
           )}
         </CardContent>
       </Card>
