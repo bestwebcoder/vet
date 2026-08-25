@@ -501,11 +501,19 @@ async function main() {
   );
 
   // PEOPLE.admins[0] is the named "hero" account used for created_by/recorded_by
-  // below and printed at the end; the rest are generated for volume.
+  // below and printed at the end; the rest are generated for volume. Every
+  // admin also gets a staff row, matching grantTeamRole
+  // (src/features/team/actions.ts) — without one, deactivating an admin from
+  // /admin/team (role -> "none") drops them out of the roster entirely.
   const adminUsers = [];
   for (const person of PEOPLE.admins) {
     const user = await ensureUser(person.email, person.name, person.phone);
     await ensureRole(user.id, "admin", organizationId);
+    await ensureRow(
+      "staff",
+      { user_id: user.id, organization_id: organizationId },
+      { branch_id: mainBranch.id, job_title: "Admin" },
+    );
     adminUsers.push(user);
   }
   const admin = adminUsers[0];

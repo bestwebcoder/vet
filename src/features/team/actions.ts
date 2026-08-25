@@ -77,6 +77,28 @@ async function grantTeamRole(
     }
   }
 
+  if (role === "admin") {
+    // Every admin needs a staff row backing them, or deactivating them later
+    // (role -> "none") drops them out of getTeamRoster entirely: neither an
+    // active admin nor a pending staff record, unreachable from this page
+    // afterwards. Doctor/client each already get their own backing row
+    // above for the same reason — this closes the same gap for admin.
+    const { data: existingStaff } = await supabase
+      .from("staff")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+
+    const { error: staffError } = existingStaff
+      ? await supabase.from("staff").update({ deleted_at: null }).eq("id", existingStaff.id)
+      : await supabase.from("staff").insert({ user_id: userId, organization_id: organizationId });
+
+    if (staffError) {
+      return failure("team", staffError, "We could not set up the staff record just now. Please try again.");
+    }
+  }
+
   const { error: grantError } = await supabase
     .from("user_roles")
     .insert({ user_id: userId, role_id: roleRow.id, organization_id: organizationId });

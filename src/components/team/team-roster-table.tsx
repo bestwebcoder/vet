@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Trash2, UsersRound } from "lucide-react";
+import { UsersRound } from "lucide-react";
 
 import { FormAlert } from "@/components/form/form-alert";
 import { SelectField } from "@/components/form/select-field";
@@ -41,28 +41,33 @@ function SaveButton() {
   );
 }
 
-function DeleteButton() {
+function DeactivateButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant="destructive" size="touch" disabled={pending} aria-busy={pending}>
-      {pending ? "Removing…" : "Remove from team"}
+      {pending ? "Deactivating…" : "Deactivate"}
     </Button>
   );
 }
 
-/** Confirmed separately from Save/role changes — unlike those, this cannot be undone from this page. */
-function DeleteTeamMemberDialog({ member }: { member: TeamMember }) {
+/**
+ * Confirmed separately from Save/role changes — unlike those, this cannot be
+ * undone from this page. Available for every roster row, not just ones with
+ * a staff record: grantTeamRole (src/features/team/actions.ts) now ensures
+ * every admin has one, since deactivating an admin with none would drop
+ * them out of getTeamRoster entirely — neither an active admin nor a
+ * pending staff record, unreachable from this page afterwards.
+ */
+function DeactivateTeamMemberDialog({ member }: { member: TeamMember }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(deleteTeamMemberAction, idleState);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={`Remove ${member.fullName}`} />}>
-        <Trash2 aria-hidden />
-      </DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>Deactivate</DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Remove {member.fullName}?</DialogTitle>
+          <DialogTitle>Deactivate {member.fullName}?</DialogTitle>
           <DialogDescription>
             Removes them from the team roster and any role they hold. Their account itself is untouched, and they can
             be restored from the removed list.
@@ -75,7 +80,7 @@ function DeleteTeamMemberDialog({ member }: { member: TeamMember }) {
             <Button type="button" variant="outline" size="touch" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <DeleteButton />
+            <DeactivateButton />
           </DialogFooter>
         </form>
       </DialogContent>
@@ -99,7 +104,13 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
         <form action={formAction} className="flex flex-wrap items-end gap-2">
           <input type="hidden" name="userId" value={member.userId} />
           <div className="w-36 [&_label]:sr-only">
-            <SelectField label="Role" name="role" options={ROLE_OPTIONS} defaultValue={member.role} />
+            {/* Keyed on the value itself: an uncontrolled Select does not
+                re-sync its defaultValue on its own, so after a save changes
+                member.role and the page revalidates, the dropdown would
+                otherwise keep showing whatever was last selected instead of
+                what actually saved — reading as "the role didn't save" even
+                though it did. */}
+            <SelectField key={member.role} label="Role" name="role" options={ROLE_OPTIONS} defaultValue={member.role} />
           </div>
           <SaveButton />
         </form>
@@ -114,7 +125,7 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
           <AdminEditIdentityDialog targetUserId={member.userId} fullName={member.fullName} phone={member.phone} />
           <AdminChangeEmailDialog targetUserId={member.userId} targetName={member.fullName} email={member.email} />
           <AdminSetPasswordDialog targetUserId={member.userId} targetName={member.fullName} />
-          {member.hasStaffRecord ? <DeleteTeamMemberDialog member={member} /> : null}
+          <DeactivateTeamMemberDialog member={member} />
         </div>
       </TableCell>
     </TableRow>

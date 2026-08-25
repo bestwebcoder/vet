@@ -6,7 +6,7 @@ import { Pencil, UserRound } from "lucide-react";
 import { DoctorEditForm } from "@/components/doctors/doctor-edit-form";
 import { DoctorPhotoForm } from "@/components/doctors/doctor-photo-form";
 import { AdminChangeEmailDialog } from "@/components/profile/admin-change-email-dialog";
-import { AdminEditIdentityDialog } from "@/components/profile/admin-edit-identity-dialog";
+import { AdminIdentityForm } from "@/components/profile/admin-identity-form";
 import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,11 +55,14 @@ function EditDoctorDialog({ doctor, branches }: { doctor: DoctorSummary; branche
         <Pencil aria-hidden />
         Edit
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit {doctor.fullName}</DialogTitle>
         </DialogHeader>
+        <AdminIdentityForm targetUserId={doctor.userId} fullName={doctor.fullName} phone={doctor.phone} />
+        <hr className="border-border" />
         <DoctorPhotoForm doctorId={doctor.id} photoUrl={doctor.photoUrl} />
+        <hr className="border-border" />
         <DoctorEditForm doctor={doctor} branches={branches} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
@@ -113,7 +116,6 @@ export function DoctorList({
 
             <div className="flex flex-wrap gap-2">
               <EditDoctorDialog doctor={doctor} branches={branches} />
-              <AdminEditIdentityDialog targetUserId={doctor.userId} fullName={doctor.fullName} phone={doctor.phone} />
               <AdminChangeEmailDialog targetUserId={doctor.userId} targetName={doctor.fullName} email={doctor.email ?? ""} />
               <AdminSetPasswordDialog targetUserId={doctor.userId} targetName={doctor.fullName} />
               <LeadDoctorToggle doctor={doctor} />
