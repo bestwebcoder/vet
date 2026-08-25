@@ -11,8 +11,10 @@ import {
   Syringe,
 } from "lucide-react";
 
+import { HeroCarousel } from "@/components/marketing/hero-carousel";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
+import { TeamGallery } from "@/components/marketing/team-gallery";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicDoctor } from "@/features/doctors/queries";
@@ -75,14 +77,30 @@ const STEPS = [
 export function FrontPage({
   organization,
   leadDoctor,
+  doctors,
   content,
 }: {
   organization: PublicOrganizationInfo | null;
   leadDoctor: PublicDoctor | null;
+  doctors: PublicDoctor[];
   content: Record<string, string>;
 }) {
   const practiceName = organization?.name ?? "The Traveling Vet";
   const text = (key: string) => siteContentValue(content, key, practiceName);
+
+  // Real, already-public photos only — the organization's own hero image
+  // plus a handful of doctors with an admin-uploaded photo. Never a stock or
+  // placeholder image standing in for a real person or place. Capped: a
+  // practice with 30 doctors should not preload 30 full-size photos into a
+  // hero slideshow nobody is going to sit through.
+  const MAX_HERO_IMAGES = 5;
+  const heroImages = [
+    ...(organization?.heroImageUrl ? [{ src: organization.heroImageUrl, alt: "" }] : []),
+    ...doctors
+      .filter((doctor) => doctor.photoUrl)
+      .slice(0, MAX_HERO_IMAGES)
+      .map((doctor) => ({ src: doctor.photoUrl!, alt: "" })),
+  ].slice(0, MAX_HERO_IMAGES);
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -103,10 +121,10 @@ export function FrontPage({
             <div
               className={cn(
                 "mx-auto grid items-center gap-10",
-                organization?.heroImageUrl ? "max-w-5xl lg:grid-cols-2 lg:text-left" : "max-w-2xl text-center",
+                heroImages.length > 0 ? "max-w-5xl lg:grid-cols-2 lg:text-left" : "max-w-2xl text-center",
               )}
             >
-              <div className={cn("grid gap-6", organization?.heroImageUrl ? "text-center lg:text-left" : "text-center")}>
+              <div className={cn("grid gap-6", heroImages.length > 0 ? "text-center lg:text-left" : "text-center")}>
                 <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
                   {text("home.hero_title")}
                 </h1>
@@ -114,7 +132,7 @@ export function FrontPage({
                 <div
                   className={cn(
                     "mt-2 flex flex-col gap-3 sm:flex-row",
-                    organization?.heroImageUrl ? "justify-center lg:justify-start" : "justify-center",
+                    heroImages.length > 0 ? "justify-center lg:justify-start" : "justify-center",
                   )}
                 >
                   <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
@@ -126,14 +144,7 @@ export function FrontPage({
                 </div>
               </div>
 
-              {organization?.heroImageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- an admin-uploaded, arbitrary-dimension public image; no build-time optimization to gain here.
-                <img
-                  src={organization.heroImageUrl}
-                  alt=""
-                  className="aspect-4/3 w-full rounded-2xl object-cover shadow-md"
-                />
-              ) : null}
+              {heroImages.length > 0 ? <HeroCarousel images={heroImages} /> : null}
             </div>
           </div>
         </section>
@@ -187,6 +198,8 @@ export function FrontPage({
             </div>
           </section>
         ) : null}
+
+        <TeamGallery doctors={doctors} />
 
         {/* Why TV Care */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">

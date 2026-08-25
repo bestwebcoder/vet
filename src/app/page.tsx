@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
-import { getPublicLeadDoctor } from "@/features/doctors/queries";
+import { getPublicDoctors } from "@/features/doctors/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 import { getPublicSiteContent } from "@/features/site-content/queries";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
@@ -22,9 +22,11 @@ export default async function RootPage() {
   const user = await getSessionUser();
 
   if (!user) {
-    const [organization, leadDoctor] = await Promise.all([getPublicOrganizationInfo(), getPublicLeadDoctor()]);
+    const [organization, doctorsResult] = await Promise.all([getPublicOrganizationInfo(), getPublicDoctors()]);
     const content = organization ? await getPublicSiteContent(organization.id) : {};
-    return <FrontPage organization={organization} leadDoctor={leadDoctor} content={content} />;
+    const doctors = doctorsResult.status === "ok" ? doctorsResult.data : [];
+    const leadDoctor = doctors.find((doctor) => doctor.isLeadDoctor) ?? null;
+    return <FrontPage organization={organization} leadDoctor={leadDoctor} doctors={doctors} content={content} />;
   }
 
   const home = homeHrefFor(user);
