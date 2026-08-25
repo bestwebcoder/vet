@@ -125,6 +125,9 @@ function toDetail(row: any): InvoiceDetail {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 export async function getInvoice(invoiceId: string): Promise<Result<InvoiceDetail | null>> {
   const supabase = await createClient();
@@ -196,21 +199,40 @@ export async function listInvoicesForPet(petId: string): Promise<Result<InvoiceD
   return { status: "ok", data: (data ?? []).map(toDetail) };
 }
 
-/** Every invoice in the practice, optionally filtered by status — the admin billing list. */
-export async function listInvoicesForOrg(status?: InvoiceStatus): Promise<Result<InvoiceDetail[]>> {
+/**
+ * Every invoice in the practice, filtered and paginated — the admin billing
+ * list. `from`/`to` bound `issued_at` (a `yyyy-MM-dd` date, inclusive both
+ * ends): a draft has no issued_at yet, so a date-filtered view naturally
+ * excludes drafts, which is the right call — an unissued invoice has no
+ * business date to be "in range" of.
+ */
+export async function listInvoicesForOrg(options: {
+  status?: InvoiceStatus;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<PaginatedResult<InvoiceDetail>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
 
-  let query = supabase.from("invoices").select(INVOICE_COLUMNS).is("deleted_at", null);
-  if (status) query = query.eq("status", status);
+  let query = supabase.from("invoices").select(INVOICE_COLUMNS, { count: "exact" }).is("deleted_at", null);
+  if (options.status) query = query.eq("status", options.status);
+  if (options.from) query = query.gte("issued_at", options.from);
+  if (options.to) query = query.lte("issued_at", `${options.to}T23:59:59.999Z`);
 
-  const { data, error } = await query.order("created_at", { ascending: false }).limit(200);
+  const start = (page - 1) * pageSize;
+  const { data, error, count } = await query
+    .order("created_at", { ascending: false })
+    .range(start, start + pageSize - 1);
 
   if (error) {
     console.error("[invoices] org list failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toDetail) };
+  return { status: "ok", data: (data ?? []).map(toDetail), totalCount: count ?? 0, page, pageSize };
 }
 
 /** A short-lived link to the stored PDF. The bucket is private. */

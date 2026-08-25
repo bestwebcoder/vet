@@ -18,6 +18,9 @@ export type Payment = {
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 const PAYMENT_COLUMNS = `
   id, invoice_id, amount_paisa, method, reference_number, paid_at, notes,
@@ -66,20 +69,36 @@ export async function listPaymentsForInvoice(invoiceId: string): Promise<Result<
   return { status: "ok", data: (data ?? []).map(toPayment) };
 }
 
-/** Every payment recorded in the practice, newest first — the admin payments log. */
-export async function listPaymentsForOrg(): Promise<Result<Payment[]>> {
+/**
+ * Every payment recorded in the practice, filtered and paginated, newest
+ * first — the admin payments log. `from`/`to` bound `paid_at` (a
+ * `yyyy-MM-dd` date, inclusive both ends).
+ */
+export async function listPaymentsForOrg(options: {
+  method?: PaymentInput["method"];
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<PaginatedResult<Payment>> {
   const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
 
-  const { data, error } = await supabase
-    .from("payments")
-    .select(PAYMENT_COLUMNS)
+  let query = supabase.from("payments").select(PAYMENT_COLUMNS, { count: "exact" });
+  if (options.method) query = query.eq("method", options.method);
+  if (options.from) query = query.gte("paid_at", options.from);
+  if (options.to) query = query.lte("paid_at", `${options.to}T23:59:59.999Z`);
+
+  const start = (page - 1) * pageSize;
+  const { data, error, count } = await query
     .order("paid_at", { ascending: false })
-    .limit(200);
+    .range(start, start + pageSize - 1);
 
   if (error) {
     console.error("[payments] org list failed", error);
     return { status: "error" };
   }
 
-  return { status: "ok", data: (data ?? []).map(toPayment) };
+  return { status: "ok", data: (data ?? []).map(toPayment), totalCount: count ?? 0, page, pageSize };
 }

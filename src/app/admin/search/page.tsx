@@ -1,4 +1,4 @@
-import { CalendarDays, PawPrint, Receipt, Search, Users } from "lucide-react";
+import { CalendarDays, PawPrint, Receipt, Search, Stethoscope, Users, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -19,7 +19,12 @@ export default async function AdminSearchPage({ searchParams }: PageProps<"/admi
   const results = term ? await globalSearch(term) : null;
   const hasResults =
     results &&
-    (results.clients.length > 0 || results.pets.length > 0 || results.appointments.length > 0 || results.invoices.length > 0);
+    (results.clients.length > 0 ||
+      results.pets.length > 0 ||
+      results.doctors.length > 0 ||
+      results.appointments.length > 0 ||
+      results.invoices.length > 0 ||
+      results.payments.length > 0);
 
   return (
     <div className="grid gap-6">
@@ -27,7 +32,7 @@ export default async function AdminSearchPage({ searchParams }: PageProps<"/admi
       <SearchField
         action="/admin/search"
         defaultValue={term}
-        placeholder="Client name, phone, pet name, microchip or appointment ID"
+        placeholder="Name, phone, pet, doctor, invoice, reference or date (yyyy-mm-dd)"
         label="Search"
       />
 
@@ -71,6 +76,23 @@ export default async function AdminSearchPage({ searchParams }: PageProps<"/admi
             </ResultCard>
           ) : null}
 
+          {results!.doctors.length > 0 ? (
+            <ResultCard icon={Stethoscope} title="Doctors">
+              {results!.doctors.map((doctor) => (
+                <Link
+                  key={doctor.id}
+                  href="/admin/doctors"
+                  className="hover:bg-muted/50 -mx-2 flex min-h-11 items-center rounded-lg px-2 py-2 text-sm"
+                >
+                  <span className="font-medium">{doctor.fullName}</span>
+                  {doctor.specialization ? (
+                    <span className="text-muted-foreground ml-2">· {doctor.specialization}</span>
+                  ) : null}
+                </Link>
+              ))}
+            </ResultCard>
+          ) : null}
+
           {results!.appointments.length > 0 ? (
             <ResultCard icon={CalendarDays} title="Appointments">
               {results!.appointments.map((appointment) => (
@@ -83,7 +105,7 @@ export default async function AdminSearchPage({ searchParams }: PageProps<"/admi
                     {format(new Date(appointment.startsAt), "d MMM yyyy · h:mm a")}
                   </span>
                   <span className="text-muted-foreground ml-2">
-                    · {appointment.clientName} · {appointment.petName}
+                    · {appointment.clientName} · {appointment.petName} · {appointment.status}
                   </span>
                 </Link>
               ))}
@@ -102,6 +124,26 @@ export default async function AdminSearchPage({ searchParams }: PageProps<"/admi
                     {invoice.invoiceNumber}
                   </span>
                   <span className="text-muted-foreground ml-2">· {invoice.clientName}</span>
+                </Link>
+              ))}
+            </ResultCard>
+          ) : null}
+
+          {results!.payments.length > 0 ? (
+            <ResultCard icon={Wallet} title="Payments">
+              {results!.payments.map((payment) => (
+                <Link
+                  key={payment.id}
+                  href={`/admin/invoices/${payment.invoiceId}`}
+                  className="hover:bg-muted/50 -mx-2 flex min-h-11 items-center rounded-lg px-2 py-2 text-sm"
+                >
+                  <span className="font-medium" data-numeric>
+                    {payment.amount}
+                  </span>
+                  <span className="text-muted-foreground ml-2">
+                    · {payment.invoiceNumber ?? "Unknown invoice"} · {payment.clientName ?? "Unknown client"} ·{" "}
+                    {format(new Date(payment.paidAt), "d MMM yyyy")}
+                  </span>
                 </Link>
               ))}
             </ResultCard>

@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { InvoiceList } from "@/components/billing/invoice-list";
 import { BillingSettings } from "@/components/billing/billing-settings";
+import { DateRangeFilter } from "@/components/search/date-range-filter";
+import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
@@ -24,16 +26,28 @@ const STATUS_FILTERS: { value: InvoiceStatus | ""; label: string }[] = [
 
 export default async function AdminBillingPage({ searchParams }: PageProps<"/admin/billing">) {
   const user = await requireRole("admin", "super_admin");
-  const { status } = await searchParams;
+  const { status, from, to, page: pageParam } = await searchParams;
   const activeStatus = typeof status === "string" ? (status as InvoiceStatus) : undefined;
+  const from_ = typeof from === "string" ? from : undefined;
+  const to_ = typeof to === "string" ? to : undefined;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   const organizationId = user.organizationIds[0];
 
   const [invoicesResult, organizationResult, doctorsResult] = await Promise.all([
-    listInvoicesForOrg(activeStatus),
+    listInvoicesForOrg({ status: activeStatus, from: from_, to: to_, page }),
     organizationId ? getOwnOrganization(organizationId) : Promise.resolve({ status: "ok" as const, data: null }),
     listDoctors(),
   ]);
+
+  function statusHref(value: InvoiceStatus | "") {
+    const params = new URLSearchParams();
+    if (value) params.set("status", value);
+    if (from_) params.set("from", from_);
+    if (to_) params.set("to", to_);
+    const query = params.toString();
+    return query ? `/admin/billing?${query}` : "/admin/billing";
+  }
 
   return (
     <div className="grid gap-6">
@@ -51,7 +65,7 @@ export default async function AdminBillingPage({ searchParams }: PageProps<"/adm
             {STATUS_FILTERS.map((filter) => (
               <Link
                 key={filter.value}
-                href={filter.value ? `/admin/billing?status=${filter.value}` : "/admin/billing"}
+                href={statusHref(filter.value)}
                 className={cn(
                   "rounded-full border px-3 py-1 text-xs",
                   (activeStatus ?? "") === filter.value
@@ -64,10 +78,26 @@ export default async function AdminBillingPage({ searchParams }: PageProps<"/adm
             ))}
           </div>
 
+          <DateRangeFilter
+            action="/admin/billing"
+            from={from_}
+            to={to_}
+            preserve={{ status: activeStatus }}
+          />
+
           {invoicesResult.status === "error" ? (
             <ErrorState title="Invoices could not be loaded" />
           ) : (
-            <InvoiceList invoices={invoicesResult.data} basePath="/admin/invoices" />
+            <>
+              <InvoiceList invoices={invoicesResult.data} basePath="/admin/invoices" />
+              <Pagination
+                basePath="/admin/billing"
+                searchParams={{ status: activeStatus, from: from_, to: to_ }}
+                page={invoicesResult.page}
+                pageSize={invoicesResult.pageSize}
+                totalCount={invoicesResult.totalCount}
+              />
+            </>
           )}
         </CardContent>
       </Card>

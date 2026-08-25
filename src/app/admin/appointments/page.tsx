@@ -4,11 +4,13 @@ import Link from "next/link";
 
 import { AppointmentList } from "@/components/appointments/appointment-list";
 import { SelectField } from "@/components/form/select-field";
+import { DateRangeFilter } from "@/components/search/date-range-filter";
+import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
-import { listAppointments, listAppointmentStatuses } from "@/features/appointments/queries";
+import { listAppointments, listAppointmentsPaginated, listAppointmentStatuses } from "@/features/appointments/queries";
 import { listDoctors } from "@/features/doctors/queries";
 
 export const metadata: Metadata = { title: "Appointments · TV Care" };
@@ -17,14 +19,17 @@ export default async function AdminAppointmentsPage({
   searchParams,
 }: PageProps<"/admin/appointments">) {
   await requireRole("admin", "super_admin");
-  const { doctorId: doctorIdParam } = await searchParams;
+  const { doctorId: doctorIdParam, from, to, page: pageParam } = await searchParams;
   const doctorId = typeof doctorIdParam === "string" && doctorIdParam ? doctorIdParam : undefined;
+  const from_ = typeof from === "string" ? from : undefined;
+  const to_ = typeof to === "string" ? to : undefined;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   const now = new Date().toISOString();
 
   const [upcoming, past, statuses, doctors] = await Promise.all([
     listAppointments({ doctorId, from: now, excludeStatuses: ["cancelled", "no_show"], order: "asc" }),
-    listAppointments({ doctorId, to: now, order: "desc", limit: 50 }),
+    listAppointmentsPaginated({ doctorId, from: from_, to: to_, page }),
     listAppointmentStatuses(),
     listDoctors(),
   ]);
@@ -44,6 +49,8 @@ export default async function AdminAppointmentsPage({
 
       {doctors.status === "ok" && doctors.data.length > 0 ? (
         <form method="get" className="flex max-w-md items-end gap-3">
+          {from_ ? <input type="hidden" name="from" value={from_} /> : null}
+          {to_ ? <input type="hidden" name="to" value={to_} /> : null}
           <div className="flex-1">
             <SelectField
               label="Filter by doctor"
@@ -84,17 +91,28 @@ export default async function AdminAppointmentsPage({
         <CardHeader>
           <CardTitle className="text-base">Past</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          <DateRangeFilter action="/admin/appointments" from={from_} to={to_} preserve={{ doctorId }} />
+
           {past.status === "error" ? (
             <ErrorState title="Past appointments could not be loaded" />
           ) : (
-            <AppointmentList
-              appointments={past.data}
-              statuses={statuses}
-              basePath="/admin/appointments"
-              audience="admin"
-              emptyTitle="No past appointments yet"
-            />
+            <>
+              <AppointmentList
+                appointments={past.data}
+                statuses={statuses}
+                basePath="/admin/appointments"
+                audience="admin"
+                emptyTitle="No past appointments yet"
+              />
+              <Pagination
+                basePath="/admin/appointments"
+                searchParams={{ doctorId, from: from_, to: to_ }}
+                page={past.page}
+                pageSize={past.pageSize}
+                totalCount={past.totalCount}
+              />
+            </>
           )}
         </CardContent>
       </Card>

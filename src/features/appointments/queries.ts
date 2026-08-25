@@ -86,6 +86,9 @@ function toSummary(row: any): AppointmentSummary {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 export type AppointmentFilter = {
   clientId?: string;
@@ -130,6 +133,52 @@ export async function listAppointments(filter: AppointmentFilter = {}): Promise<
   }
 
   return { status: "ok", data: (data ?? []).map(toSummary) };
+}
+
+/**
+ * The same filters as {@link listAppointments}, paginated with a count —
+ * for a list too long to just cap and show, unlike every other caller of
+ * listAppointments (a day, a week, one doctor's near-term queue), which stay
+ * on the simple limit. `from`/`to` here are plain `yyyy-MM-dd` dates, not
+ * the ISO instants listAppointments takes, converted to an inclusive range
+ * on `starts_at`.
+ */
+export async function listAppointmentsPaginated(
+  filter: Omit<AppointmentFilter, "from" | "to" | "limit"> & {
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<PaginatedResult<AppointmentSummary>> {
+  const supabase = await createClient();
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = filter.pageSize ?? 25;
+
+  let query = supabase
+    .from("appointments")
+    .select(APPOINTMENT_COLUMNS, { count: "exact" })
+    .is("deleted_at", null)
+    .order("starts_at", { ascending: (filter.order ?? "desc") === "asc" });
+
+  if (filter.clientId) query = query.eq("client_id", filter.clientId);
+  if (filter.doctorId) query = query.eq("doctor_id", filter.doctorId);
+  if (filter.petId) query = query.eq("pet_id", filter.petId);
+  if (filter.visitType) query = query.eq("visit_type", filter.visitType);
+  if (filter.from) query = query.gte("starts_at", filter.from);
+  if (filter.to) query = query.lte("starts_at", `${filter.to}T23:59:59.999Z`);
+  if (filter.statuses?.length) query = query.in("status", filter.statuses);
+  if (filter.excludeStatuses?.length) query = query.not("status", "in", `(${filter.excludeStatuses.join(",")})`);
+
+  const start = (page - 1) * pageSize;
+  const { data, error, count } = await query.range(start, start + pageSize - 1);
+
+  if (error) {
+    console.error("[appointments] paginated list failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (data ?? []).map(toSummary), totalCount: count ?? 0, page, pageSize };
 }
 
 export async function getAppointment(appointmentId: string): Promise<Result<AppointmentSummary | null>> {
