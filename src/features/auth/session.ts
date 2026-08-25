@@ -27,6 +27,7 @@ export type SessionUser = {
   fullName: string;
   email: string;
   phone: string | null;
+  avatarUrl: string | null;
   roles: RoleSlug[];
   organizationIds: string[];
 };
@@ -41,7 +42,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const userId = claims.claims.sub as string;
 
   const [{ data: profile }, { data: grants }] = await Promise.all([
-    supabase.from("users").select("full_name, email, phone").eq("id", userId).single(),
+    supabase.from("users").select("full_name, email, phone, avatar_url").eq("id", userId).single(),
     supabase
       .from("user_roles")
       .select("organization_id, roles(slug)")
@@ -65,6 +66,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     fullName: profile.full_name,
     email: profile.email,
     phone: profile.phone,
+    avatarUrl: profile.avatar_url,
     roles: [...new Set(roles)],
     organizationIds: [...new Set((grants ?? []).map((grant) => grant.organization_id))],
   };

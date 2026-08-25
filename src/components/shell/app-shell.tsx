@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
 import Link from "next/link";
 
 import { MobileNav } from "@/components/shell/mobile-nav";
@@ -44,7 +44,7 @@ export function AppShell({
               Search
             </Link>
           ) : null}
-          <UserPanel user={user} />
+          <UserPanel user={user} profileHref={`${area.href}/profile`} />
         </div>
       </aside>
 
@@ -65,6 +65,13 @@ export function AppShell({
                 <Search aria-hidden />
               </Link>
             ) : null}
+            <Link
+              href={`${area.href}/profile`}
+              className={buttonVariants({ variant: "ghost", size: "icon" })}
+              aria-label="My profile"
+            >
+              <UserRound aria-hidden />
+            </Link>
             <ThemeToggle />
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
@@ -82,13 +89,23 @@ export function AppShell({
   );
 }
 
-function UserPanel({ user }: { user: SessionUser }) {
+function UserPanel({ user, profileHref }: { user: SessionUser; profileHref: string }) {
   return (
     <div className="grid gap-2">
-      <div className="grid px-2 leading-tight">
-        <span className="truncate text-sm font-medium">{user.fullName}</span>
-        <span className="text-muted-foreground truncate text-xs">{user.email}</span>
-      </div>
+      <Link href={profileHref} className="hover:bg-sidebar-accent flex items-center gap-2 rounded-md px-2 py-1">
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- an arbitrary-dimension public image; no build-time optimization to gain here.
+          <img src={user.avatarUrl} alt="" className="size-8 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="bg-secondary text-secondary-foreground flex size-8 shrink-0 items-center justify-center rounded-full">
+            <UserRound className="size-4" aria-hidden />
+          </span>
+        )}
+        <span className="grid min-w-0 leading-tight">
+          <span className="truncate text-sm font-medium">{user.fullName}</span>
+          <span className="text-muted-foreground truncate text-xs">{user.email}</span>
+        </span>
+      </Link>
       <div className="flex items-center gap-2">
         <form action={logoutAction} className="flex-1">
           <Button type="submit" variant="outline" size="sm" className="w-full">

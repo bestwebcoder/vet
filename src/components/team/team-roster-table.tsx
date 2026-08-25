@@ -6,6 +6,7 @@ import { Trash2, UsersRound } from "lucide-react";
 
 import { FormAlert } from "@/components/form/form-alert";
 import { SelectField } from "@/components/form/select-field";
+import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { EmptyState } from "@/components/states/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,7 +107,12 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
           </div>
         ) : null}
       </TableCell>
-      <TableCell>{member.hasStaffRecord ? <DeleteTeamMemberDialog member={member} /> : null}</TableCell>
+      <TableCell>
+        <div className="flex justify-end gap-2">
+          <AdminSetPasswordDialog targetUserId={member.userId} targetName={member.fullName} />
+          {member.hasStaffRecord ? <DeleteTeamMemberDialog member={member} /> : null}
+        </div>
+      </TableCell>
     </TableRow>
   );
 }
@@ -134,7 +140,7 @@ export function TeamRosterTable({ members }: { members: TeamMember[] }) {
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead className="w-11" />
+          <TableHead className="w-px" />
         </TableRow>
       </TableHeader>
       <TableBody>

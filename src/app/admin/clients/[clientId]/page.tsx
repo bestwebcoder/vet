@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 
 import { ClientDeactivateToggle } from "@/components/clients/client-deactivate-toggle";
 import { PatientList } from "@/components/pets/patient-list";
+import { AdminAvatarForm } from "@/components/profile/admin-avatar-form";
+import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { requireRole } from "@/features/auth/session";
 import { getClientRecord } from "@/features/clients/queries";
 import { listPets } from "@/features/pets/queries";
+import { getUserAvatarUrl } from "@/features/profile/queries";
 
 export const metadata: Metadata = { title: "Client · TV Care" };
 
@@ -25,7 +28,10 @@ export default async function AdminClientDetailPage({
   if (result.status === "error" || !result.data) notFound();
 
   const client = result.data;
-  const pets = await listPets({ clientId });
+  const [pets, avatarUrl] = await Promise.all([
+    listPets({ clientId }),
+    client.userId ? getUserAvatarUrl(client.userId) : Promise.resolve(null),
+  ]);
 
   const details = [
     { label: "Mobile", value: client.phone, numeric: true },
@@ -93,6 +99,21 @@ export default async function AdminClientDetailPage({
           ) : null}
         </CardContent>
       </Card>
+
+      {client.userId ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-4">
+            <div className="grid gap-1">
+              <CardTitle className="text-base">Account</CardTitle>
+              <CardDescription>What they see when they sign in.</CardDescription>
+            </div>
+            <AdminSetPasswordDialog targetUserId={client.userId} targetName={client.fullName} />
+          </CardHeader>
+          <CardContent>
+            <AdminAvatarForm targetUserId={client.userId} avatarUrl={avatarUrl} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-4">
