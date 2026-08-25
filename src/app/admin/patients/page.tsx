@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PatientList } from "@/components/pets/patient-list";
 import { SearchField } from "@/components/search/search-field";
@@ -7,16 +8,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { listClients } from "@/features/clients/queries";
 import { listPets } from "@/features/pets/queries";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Patients · TV Care" };
 
 export default async function AdminPatientsPage({ searchParams }: PageProps<"/admin/patients">) {
   await requireRole("admin", "super_admin");
 
-  const { q } = await searchParams;
+  const { q, show } = await searchParams;
   const search = typeof q === "string" ? q : undefined;
+  const includeInactive = show === "all";
 
-  const [pets, clients] = await Promise.all([listPets({ search }), listClients({ limit: 500 })]);
+  const [pets, clients] = await Promise.all([
+    listPets({ search, includeInactive }),
+    listClients({ limit: 500 }),
+  ]);
 
   // Owner names are resolved separately rather than embedded: the pets query is
   // already scoped by policy, and this keeps one shape for every caller.
@@ -37,6 +43,27 @@ export default async function AdminPatientsPage({ searchParams }: PageProps<"/ad
         placeholder="Patient, owner, mobile number or microchip"
         label="Search patients"
       />
+
+      <div className="flex gap-2">
+        <Link
+          href="/admin/patients"
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs",
+            !includeInactive ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground",
+          )}
+        >
+          Active
+        </Link>
+        <Link
+          href="/admin/patients?show=all"
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs",
+            includeInactive ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground",
+          )}
+        >
+          Include archived
+        </Link>
+      </div>
 
       <Card>
         <CardContent>

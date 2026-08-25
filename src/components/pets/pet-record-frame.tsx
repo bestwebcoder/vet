@@ -2,7 +2,9 @@ import { CalendarPlus, PawPrint, Pencil } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { PetArchiveToggle } from "@/components/pets/pet-archive-toggle";
 import { PetTabNav } from "@/components/pets/pet-tab-nav";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import type { PetDetail } from "@/features/pets/queries";
 
@@ -16,11 +18,14 @@ export function PetRecordFrame({
   pet,
   photoUrl,
   basePath,
+  canManage = false,
   children,
 }: {
   pet: PetDetail;
   photoUrl: string | null;
   basePath: string;
+  /** Clinic staff only — shows the archive/restore toggle. Never shown to the pet's owner. */
+  canManage?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -35,7 +40,10 @@ export function PetRecordFrame({
         </span>
 
         <div className="grid flex-1 gap-1">
-          <h1>{pet.name}</h1>
+          <h1 className="flex items-center gap-2">
+            {pet.name}
+            {!pet.isActive ? <Badge variant="destructive">Archived</Badge> : null}
+          </h1>
           <p className="text-muted-foreground">
             {[pet.speciesName, pet.breedName].filter(Boolean).join(" · ") ||
               "Species not recorded"}{" "}
@@ -58,6 +66,8 @@ export function PetRecordFrame({
           <Pencil aria-hidden />
           Edit
         </Link>
+
+        {canManage ? <PetArchiveToggle petId={pet.id} isActive={pet.isActive} /> : null}
       </div>
 
       <PetTabNav basePath={basePath} />

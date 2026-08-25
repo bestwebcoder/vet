@@ -6,6 +6,8 @@ import { Trash2, UsersRound } from "lucide-react";
 
 import { FormAlert } from "@/components/form/form-alert";
 import { SelectField } from "@/components/form/select-field";
+import { AdminChangeEmailDialog } from "@/components/profile/admin-change-email-dialog";
+import { AdminEditIdentityDialog } from "@/components/profile/admin-edit-identity-dialog";
 import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { EmptyState } from "@/components/states/empty-state";
 import { Button } from "@/components/ui/button";
@@ -108,7 +110,9 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
         ) : null}
       </TableCell>
       <TableCell>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <AdminEditIdentityDialog targetUserId={member.userId} fullName={member.fullName} phone={member.phone} />
+          <AdminChangeEmailDialog targetUserId={member.userId} targetName={member.fullName} email={member.email} />
           <AdminSetPasswordDialog targetUserId={member.userId} targetName={member.fullName} />
           {member.hasStaffRecord ? <DeleteTeamMemberDialog member={member} /> : null}
         </div>

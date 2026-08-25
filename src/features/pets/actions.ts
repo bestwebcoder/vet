@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getSessionUser } from "@/features/auth/session";
+import { getSessionUser, requireRole } from "@/features/auth/session";
 import { failure, invalid, text, triState, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { clientSchema } from "@/lib/validation/client";
@@ -271,4 +271,73 @@ export async function updatePetAction(
     message: photoMessage ? `Changes saved, but the photo was not. ${photoMessage}` : "Changes saved.",
     id: petId,
   };
+}
+
+/**
+ * Soft-deletes a patient record — clinic staff only, never the client, and
+ * never a hard delete: this record's SOAP notes, prescriptions, vaccinations
+ * and invoices must survive it (CLAUDE.md §6, and the pattern every other
+ * removal in this app already follows — deactivateDoctorAction,
+ * deactivateClientAction, deleteTeamMemberAction). restorePetAction is the
+ * way back.
+ */
+export async function archivePetAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin", "doctor");
+
+  const petId = text(formData, "petId");
+  if (!petId) return { status: "error", message: "We could not tell which patient to archive." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pets")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", petId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return failure("pets", error, "We could not archive this patient just now. Please try again.");
+  }
+
+  if (!data) {
+    return { status: "error", message: "You do not have access to this patient." };
+  }
+
+  revalidatePath("/admin/patients");
+  revalidatePath("/doctor/patients");
+  revalidatePath(`/admin/patients/${petId}`);
+  revalidatePath(`/doctor/patients/${petId}`);
+
+  return { status: "success", message: "Patient archived." };
+}
+
+export async function restorePetAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin", "doctor");
+
+  const petId = text(formData, "petId");
+  if (!petId) return { status: "error", message: "We could not tell which patient to restore." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pets")
+    .update({ deleted_at: null })
+    .eq("id", petId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return failure("pets", error, "We could not restore this patient just now. Please try again.");
+  }
+
+  if (!data) {
+    return { status: "error", message: "You do not have access to this patient." };
+  }
+
+  revalidatePath("/admin/patients");
+  revalidatePath("/doctor/patients");
+  revalidatePath(`/admin/patients/${petId}`);
+  revalidatePath(`/doctor/patients/${petId}`);
+
+  return { status: "success", message: "Patient restored." };
 }

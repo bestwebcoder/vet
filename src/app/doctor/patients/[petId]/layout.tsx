@@ -14,7 +14,7 @@ export default async function DoctorPatientLayout({
   await requireRole("doctor");
   const { petId } = await params;
 
-  const result = await getPet(petId);
+  const result = await getPet(petId, { includeInactive: true });
   if (result.status === "error" || !result.data) notFound();
 
   const photoUrl = await signedPhotoUrl(result.data.photoPath);
@@ -24,6 +24,7 @@ export default async function DoctorPatientLayout({
       pet={result.data}
       photoUrl={photoUrl}
       basePath={`/doctor/patients/${result.data.id}`}
+      canManage
     >
       {children}
     </PetRecordFrame>

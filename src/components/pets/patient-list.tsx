@@ -2,6 +2,7 @@ import { PawPrint } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/states/empty-state";
+import { Badge } from "@/components/ui/badge";
 import type { PetDetail } from "@/features/pets/queries";
 
 const SEX_LABEL: Record<string, string> = {
@@ -46,7 +47,10 @@ export function PatientList({
             className="hover:bg-muted/50 focus-visible:ring-ring -mx-2 flex min-h-11 items-center gap-4 rounded-lg px-2 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
             <div className="grid flex-1 gap-0.5">
-              <span className="text-sm font-medium">{pet.name}</span>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                {pet.name}
+                {!pet.isActive ? <Badge variant="destructive">Archived</Badge> : null}
+              </span>
               <span className="text-muted-foreground text-sm">
                 {[pet.speciesName, pet.breedName].filter(Boolean).join(" · ") ||
                   "Species not recorded"}

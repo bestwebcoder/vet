@@ -21,7 +21,7 @@ import { formatWeight } from "@/lib/units";
 const PET_COLUMNS = `
   id, name, sex, is_neutered, date_of_birth, is_date_of_birth_estimated,
   weight_grams, weight_recorded_at, colour, microchip_number,
-  allergies, chronic_conditions, notes, photo_path, client_id, organization_id,
+  allergies, chronic_conditions, notes, photo_path, client_id, organization_id, deleted_at,
   species:species_id (id, name),
   breed:breeds (id, name)
 `;
@@ -41,6 +41,7 @@ export type PetSummary = {
   age: string;
   weight: string | null;
   photoPath: string | null;
+  isActive: boolean;
 };
 
 export type PetDetail = PetSummary & {
@@ -76,6 +77,7 @@ function toDetail(row: any): PetDetail {
     age: formatAge(row.date_of_birth, { isEstimated: row.is_date_of_birth_estimated }),
     weight: formatWeight(row.weight_grams),
     photoPath: row.photo_path,
+    isActive: row.deleted_at === null,
     clientId: row.client_id,
     organizationId: row.organization_id,
     isNeutered: row.is_neutered,
@@ -96,16 +98,19 @@ export type Result<T> = { status: "ok"; data: T } | { status: "error" };
 
 /** Patients the caller may see, newest first. Optionally for one owner. */
 export async function listPets(
-  options: { clientId?: string; search?: string; limit?: number } = {},
+  options: { clientId?: string; search?: string; limit?: number; includeInactive?: boolean } = {},
 ): Promise<Result<PetDetail[]>> {
   const supabase = await createClient();
 
   let query = supabase
     .from("pets")
     .select(PET_COLUMNS)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(options.limit ?? 100);
+
+  if (!options.includeInactive) {
+    query = query.is("deleted_at", null);
+  }
 
   if (options.clientId) {
     query = query.eq("client_id", options.clientId);
@@ -153,15 +158,18 @@ export async function listPets(
   return { status: "ok", data: (data ?? []).map(toDetail) };
 }
 
-export async function getPet(petId: string): Promise<Result<PetDetail | null>> {
+export async function getPet(
+  petId: string,
+  options: { includeInactive?: boolean } = {},
+): Promise<Result<PetDetail | null>> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("pets")
-    .select(PET_COLUMNS)
-    .eq("id", petId)
-    .is("deleted_at", null)
-    .maybeSingle();
+  let query = supabase.from("pets").select(PET_COLUMNS).eq("id", petId);
+  if (!options.includeInactive) {
+    query = query.is("deleted_at", null);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     console.error("[pets] get failed", error);

@@ -27,6 +27,7 @@ export const updateDoctorProfileSchema = z.object({
   specialization: optionalText(120, "Specialization"),
   qualifications: optionalText(300, "Qualifications"),
   bio: optionalText(1000, "Bio"),
+  isAcceptingAppointments: z.boolean(),
 });
 
 export type UpdateDoctorProfileInput = z.input<typeof updateDoctorProfileSchema>;

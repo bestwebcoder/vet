@@ -130,6 +130,7 @@ export async function updateDoctorProfileAction(_previous: FormState, formData: 
     specialization: text(formData, "specialization") ?? null,
     qualifications: text(formData, "qualifications") ?? null,
     bio: text(formData, "bio") ?? null,
+    isAcceptingAppointments: formData.get("isAcceptingAppointments") === "on",
   });
   if (!parsed.success) return invalid(parsed.error);
 
@@ -142,6 +143,7 @@ export async function updateDoctorProfileAction(_previous: FormState, formData: 
       specialization: parsed.data.specialization,
       qualifications: parsed.data.qualifications,
       bio: parsed.data.bio,
+      is_accepting_appointments: parsed.data.isAcceptingAppointments,
     })
     .eq("id", doctorId);
 

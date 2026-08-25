@@ -64,6 +64,16 @@ export function DoctorEditForm({
       />
       <TextAreaField label="Bio" name="bio" rows={3} defaultValue={doctor.bio ?? ""} errors={fieldErrors?.bio} />
 
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="isAcceptingAppointments"
+          defaultChecked={doctor.isAcceptingAppointments}
+          className="accent-primary size-4"
+        />
+        Accepting new appointments
+      </label>
+
       <SubmitButton pendingLabel="Saving…">Save profile</SubmitButton>
     </form>
   );

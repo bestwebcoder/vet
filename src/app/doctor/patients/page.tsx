@@ -10,16 +10,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { listClients } from "@/features/clients/queries";
 import { listPets } from "@/features/pets/queries";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Patients · TV Care" };
 
 export default async function DoctorPatientsPage({ searchParams }: PageProps<"/doctor/patients">) {
   await requireRole("doctor");
 
-  const { q } = await searchParams;
+  const { q, show } = await searchParams;
   const search = typeof q === "string" ? q : undefined;
+  const includeInactive = show === "all";
 
-  const [pets, clients] = await Promise.all([listPets({ search }), listClients({ limit: 500 })]);
+  const [pets, clients] = await Promise.all([
+    listPets({ search, includeInactive }),
+    listClients({ limit: 500 }),
+  ]);
 
   // Owner names are resolved separately rather than embedded: the pets query is
   // already scoped by policy, and this keeps one shape for every caller.
@@ -50,6 +55,27 @@ export default async function DoctorPatientsPage({ searchParams }: PageProps<"/d
         placeholder="Patient, owner, mobile number or microchip"
         label="Search patients"
       />
+
+      <div className="flex gap-2">
+        <Link
+          href="/doctor/patients"
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs",
+            !includeInactive ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground",
+          )}
+        >
+          Active
+        </Link>
+        <Link
+          href="/doctor/patients?show=all"
+          className={cn(
+            "rounded-full border px-3 py-1 text-xs",
+            includeInactive ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground",
+          )}
+        >
+          Include archived
+        </Link>
+      </div>
 
       <Card>
         <CardContent>

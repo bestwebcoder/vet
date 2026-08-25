@@ -5,6 +5,8 @@ import { Pencil, UserRound } from "lucide-react";
 
 import { DoctorEditForm } from "@/components/doctors/doctor-edit-form";
 import { DoctorPhotoForm } from "@/components/doctors/doctor-photo-form";
+import { AdminChangeEmailDialog } from "@/components/profile/admin-change-email-dialog";
+import { AdminEditIdentityDialog } from "@/components/profile/admin-edit-identity-dialog";
 import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -111,6 +113,8 @@ export function DoctorList({
 
             <div className="flex flex-wrap gap-2">
               <EditDoctorDialog doctor={doctor} branches={branches} />
+              <AdminEditIdentityDialog targetUserId={doctor.userId} fullName={doctor.fullName} phone={doctor.phone} />
+              <AdminChangeEmailDialog targetUserId={doctor.userId} targetName={doctor.fullName} email={doctor.email ?? ""} />
               <AdminSetPasswordDialog targetUserId={doctor.userId} targetName={doctor.fullName} />
               <LeadDoctorToggle doctor={doctor} />
               <DeactivateToggle doctor={doctor} />
