@@ -191,6 +191,20 @@ describe("a client sees only the current finalized version", () => {
     const { data } = await clientB.from("prescriptions").select("id").eq("appointment_id", appointmentId);
     expect(data).toEqual([]);
   });
+
+  it("an admin can view it too, view-only — CLAUDE.md §3's clinical records row for admin", async () => {
+    const { data, error } = await adminA.from("prescriptions").select("id, status").eq("appointment_id", appointmentId);
+    expect(error).toBeNull();
+    expect(data).toEqual([{ id: prescriptionId, status: "finalized" }]);
+
+    const { data: written, error: writeError } = await adminA
+      .from("prescriptions")
+      .update({ instructions: "Rewritten by an admin" })
+      .eq("id", prescriptionId)
+      .select("id");
+    expect(writeError).toBeNull();
+    expect(written).toEqual([]);
+  });
 });
 
 describe("a finalized prescription and its items are immutable except for being superseded", () => {

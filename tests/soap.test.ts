@@ -160,6 +160,27 @@ describe("a client sees only the current finalized version", () => {
     expect(data).toEqual([{ id: draft!.id, status: "finalized" }]);
   });
 
+  it("an admin can view it too, view-only — CLAUDE.md §3's clinical records row for admin", async () => {
+    const { data: current } = await admin
+      .from("soap_records")
+      .select("id")
+      .eq("appointment_id", appointmentA)
+      .is("superseded_at", null)
+      .single();
+
+    const { data, error } = await adminA.from("soap_records").select("id, status").eq("appointment_id", appointmentA);
+    expect(error).toBeNull();
+    expect(data).toEqual([{ id: current!.id, status: "finalized" }]);
+
+    const { data: written, error: writeError } = await adminA
+      .from("soap_records")
+      .update({ chief_complaint: "Rewritten by an admin" })
+      .eq("id", current!.id)
+      .select("id");
+    expect(writeError).toBeNull();
+    expect(written).toEqual([]);
+  });
+
   it("still cannot write to it", async () => {
     const { data: current } = await admin
       .from("soap_records")

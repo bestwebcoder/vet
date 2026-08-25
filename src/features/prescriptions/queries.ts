@@ -8,13 +8,20 @@ import { createClient } from "@/lib/supabase/server";
  * `soap/queries.ts`.
  */
 
+const ITEM_COLUMNS =
+  "id, medication_id, drug_name, strength, formulation, dose_per_kg, dose_unit, computed_dose, route, frequency, duration, quantity, instructions, sort_order";
+
+// items embedded directly rather than fetched per-row: a list of N
+// prescriptions is one round trip now, not N+1 — the same embedded-resource
+// pattern already used for pet/doctor/appointment here.
 const PRESCRIPTION_COLUMNS = `
   id, appointment_id, pet_id, organization_id, doctor_id, version, status,
   finalized_at, superseded_at, prescription_number, follow_up_date,
   instructions, pdf_path, signed_at, created_at, updated_at,
   pet:pets (id, name, species:species_id (name), breed:breeds (name)),
   doctor:doctors (id, registration_number, signature_url, user:user_id (full_name)),
-  appointment:appointments (id, starts_at, client:clients (id, full_name, phone))
+  appointment:appointments (id, starts_at, client:clients (id, full_name, phone)),
+  items:prescription_items (${ITEM_COLUMNS})
 `;
 
 type One<T> = T | T[] | null;
@@ -68,7 +75,8 @@ export type PrescriptionDetail = {
 };
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
-function toDetail(row: any, items: PrescriptionItem[]): PrescriptionDetail {
+function toDetail(row: any): PrescriptionDetail {
+  const items = ((row.items ?? []) as any[]).map(toItem).sort((a, b) => a.sortOrder - b.sortOrder);
   const pet = one<any>(row.pet);
   const species = pet ? one<any>(pet.species) : null;
   const breed = pet ? one<any>(pet.breed) : null;
@@ -141,26 +149,7 @@ function toItem(row: {
   };
 }
 
-const ITEM_COLUMNS =
-  "id, medication_id, drug_name, strength, formulation, dose_per_kg, dose_unit, computed_dose, route, frequency, duration, quantity, instructions, sort_order";
-
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
-
-async function itemsFor(prescriptionId: string) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("prescription_items")
-    .select(ITEM_COLUMNS)
-    .eq("prescription_id", prescriptionId)
-    .order("sort_order");
-
-  if (error) {
-    console.error("[prescriptions] item list failed", error);
-    return [];
-  }
-
-  return (data ?? []).map(toItem);
-}
 
 export async function getCurrentPrescription(appointmentId: string): Promise<Result<PrescriptionDetail | null>> {
   const supabase = await createClient();
@@ -179,7 +168,7 @@ export async function getCurrentPrescription(appointmentId: string): Promise<Res
 
   if (!data) return { status: "ok", data: null };
 
-  return { status: "ok", data: toDetail(data, await itemsFor(data.id)) };
+  return { status: "ok", data: toDetail(data) };
 }
 
 export async function getPrescription(id: string): Promise<Result<PrescriptionDetail | null>> {
@@ -194,7 +183,7 @@ export async function getPrescription(id: string): Promise<Result<PrescriptionDe
 
   if (!data) return { status: "ok", data: null };
 
-  return { status: "ok", data: toDetail(data, await itemsFor(data.id)) };
+  return { status: "ok", data: toDetail(data) };
 }
 
 export async function listPrescriptionVersions(appointmentId: string): Promise<Result<{ id: string; version: number }[]>> {
@@ -230,8 +219,7 @@ export async function listPrescriptionsForPet(petId: string): Promise<Result<Pre
     return { status: "error" };
   }
 
-  const withItems = await Promise.all((data ?? []).map(async (row) => toDetail(row, await itemsFor(row.id))));
-  return { status: "ok", data: withItems };
+  return { status: "ok", data: (data ?? []).map(toDetail) };
 }
 
 export async function listDraftPrescriptionsForDoctor(doctorId: string): Promise<Result<PrescriptionDetail[]>> {
@@ -250,8 +238,7 @@ export async function listDraftPrescriptionsForDoctor(doctorId: string): Promise
     return { status: "error" };
   }
 
-  const withItems = await Promise.all((data ?? []).map(async (row) => toDetail(row, await itemsFor(row.id))));
-  return { status: "ok", data: withItems };
+  return { status: "ok", data: (data ?? []).map(toDetail) };
 }
 
 export type MedicationOption = {

@@ -218,7 +218,7 @@ export function SoapForm({
             label="Medication"
             name="medication"
             defaultValue={soapRecord?.medication ?? ""}
-            hint="Free text this phase — the prescription builder arrives in Phase 5."
+            hint="A quick summary — build the actual prescription from this visit's appointment page."
             errors={fieldErrors?.medication}
           />
           <TextAreaField
