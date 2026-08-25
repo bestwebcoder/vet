@@ -23,6 +23,8 @@ export type TeamMember = {
   email: string;
   phone: string | null;
   role: TeamRole;
+  /** Whether a staff row backs this person — gates the "Delete" action, which removes that row. */
+  hasStaffRecord: boolean;
 };
 
 type UserProfile = { full_name: string; email: string; phone: string | null };
@@ -54,6 +56,7 @@ export async function getTeamRoster(organizationId: string): Promise<Result<Team
   }
 
   const roleHolders = new Set((roleRows ?? []).map((row) => row.user_id));
+  const staffHolders = new Set((staffRows ?? []).map((row) => row.user_id));
 
   const admins: TeamMember[] = (roleRows ?? [])
     .filter((row) => {
@@ -68,6 +71,7 @@ export async function getTeamRoster(organizationId: string): Promise<Result<Team
         email: user?.email ?? "",
         phone: user?.phone ?? null,
         role: "admin" as const,
+        hasStaffRecord: staffHolders.has(row.user_id),
       };
     });
 
@@ -81,11 +85,40 @@ export async function getTeamRoster(organizationId: string): Promise<Result<Team
         email: user?.email ?? "",
         phone: user?.phone ?? null,
         role: "none" as const,
+        hasStaffRecord: true,
       };
     });
 
   return {
     status: "ok",
     data: [...admins, ...pending].sort((a, b) => a.fullName.localeCompare(b.fullName)),
+  };
+}
+
+export type RemovedTeamMember = { userId: string; fullName: string; email: string };
+
+/** People deleteTeamMemberAction has removed — restoreTeamMemberAction's undo list. */
+export async function getRemovedTeamMembers(organizationId: string): Promise<Result<RemovedTeamMember[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("staff")
+    .select("user_id, user:user_id (full_name, email)")
+    .eq("organization_id", organizationId)
+    .not("deleted_at", "is", null);
+
+  if (error) {
+    console.error("[team] removed roster failed", error);
+    return { status: "error" };
+  }
+
+  return {
+    status: "ok",
+    data: (data ?? [])
+      .map((row) => {
+        const user = one(row.user as Related);
+        return { userId: row.user_id, fullName: user?.full_name ?? "Unknown", email: user?.email ?? "" };
+      })
+      .sort((a, b) => a.fullName.localeCompare(b.fullName)),
   };
 }

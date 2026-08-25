@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { uuidSchema } from "@/lib/validation/common";
+import { emailSchema, fullNameSchema, optionalText, phoneSchema, uuidSchema } from "@/lib/validation/common";
 
 /**
  * "none" removes every active role grant in the practice without adding a
@@ -18,3 +18,14 @@ export const setTeamRoleSchema = z.object({
 
 export type SetTeamRoleInput = z.input<typeof setTeamRoleSchema>;
 export type SetTeamRoleValues = z.output<typeof setTeamRoleSchema>;
+
+export const inviteTeamMemberSchema = z.object({
+  fullName: fullNameSchema,
+  email: emailSchema,
+  phone: phoneSchema.nullish().transform((value) => value ?? null),
+  jobTitle: optionalText(120, "Job title"),
+  role: z.enum(ASSIGNABLE_ROLE_SLUGS, "Choose a role"),
+});
+
+export type InviteTeamMemberInput = z.input<typeof inviteTeamMemberSchema>;
+export type InviteTeamMemberValues = z.output<typeof inviteTeamMemberSchema>;
