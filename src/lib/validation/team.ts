@@ -5,10 +5,18 @@ import { emailSchema, fullNameSchema, optionalText, phoneSchema, uuidSchema } fr
 /**
  * "none" removes every active role grant in the practice without adding a
  * new one — the same soft-revoke deactivateDoctorAction and
- * deactivateClientAction already use, surfaced here as a fourth option
- * alongside the roles admins can actually assign in the UI.
+ * deactivateClientAction already use, surfaced here alongside the roles
+ * admins can actually assign in the UI.
  */
-export const ASSIGNABLE_ROLE_SLUGS = ["none", "client", "doctor", "admin"] as const;
+export const ASSIGNABLE_ROLE_SLUGS = [
+  "none",
+  "client",
+  "doctor",
+  "admin",
+  "finance_manager",
+  "lab",
+  "receptionist",
+] as const;
 export type AssignableRoleSlug = (typeof ASSIGNABLE_ROLE_SLUGS)[number];
 
 export const setTeamRoleSchema = z.object({
@@ -29,3 +37,28 @@ export const inviteTeamMemberSchema = z.object({
 
 export type InviteTeamMemberInput = z.input<typeof inviteTeamMemberSchema>;
 export type InviteTeamMemberValues = z.output<typeof inviteTeamMemberSchema>;
+
+/**
+ * Labels for the role select, in one place: the invite dialog and the roster
+ * table both render this list, and two copies drifted the moment a role was
+ * added. "none" reads differently in each — "No role yet" for someone being
+ * invited, "No role" for someone already here — so it is a parameter.
+ */
+export const ROLE_LABELS: Record<Exclude<AssignableRoleSlug, "none">, string> = {
+  client: "Client",
+  doctor: "Doctor",
+  admin: "Admin",
+  finance_manager: "Finance Manager",
+  lab: "Lab",
+  receptionist: "Receptionist",
+};
+
+export function roleOptions(noneLabel: string): { value: AssignableRoleSlug; label: string }[] {
+  return [
+    { value: "none" as const, label: noneLabel },
+    ...ASSIGNABLE_ROLE_SLUGS.filter((slug) => slug !== "none").map((slug) => ({
+      value: slug,
+      label: ROLE_LABELS[slug as Exclude<AssignableRoleSlug, "none">],
+    })),
+  ];
+}

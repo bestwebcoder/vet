@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { AREAS, type Area } from "@/components/shell/navigation";
+import { navFor, type Area } from "@/components/shell/navigation";
+import type { RoleSlug } from "@/features/auth/session";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,13 +17,16 @@ import { cn } from "@/lib/utils";
  */
 export function NavLinks({
   areaKey,
+  roles,
   onNavigate,
 }: {
   areaKey: Area["key"];
+  /** Plain slugs, so this stays serializable across the server/client boundary. */
+  roles: RoleSlug[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = AREAS[areaKey].nav;
+  const items = navFor(areaKey, roles);
 
   return (
     <nav className="grid gap-1" aria-label="Main">

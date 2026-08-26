@@ -10,7 +10,8 @@ import { createClient } from "@/lib/supabase/server";
  * staff (see the `staff` table) who has not been granted a role yet — the
  * gap the demo seed's "no role granted" account exists to illustrate. Once
  * setTeamRoleAction moves someone onto doctor or client, they carry on being
- * managed from that role's own page and drop out of this list.
+ * managed from that role's own page and drop out of this list. Every other
+ * clinic-side role stays here — see MANAGED_TEAM_ROLES.
  */
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
@@ -18,7 +19,15 @@ export type PaginatedResult<T> =
   | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
   | { status: "error" };
 
-export type TeamRole = "admin" | "none";
+/**
+ * The roles this page manages. Doctors and clients are deliberately absent —
+ * they have their own pages — but every other clinic-side role must appear
+ * here, or granting someone one makes them vanish from the only screen that
+ * could change it back.
+ */
+export const MANAGED_TEAM_ROLES = ["admin", "finance_manager", "lab", "receptionist"] as const;
+
+export type TeamRole = (typeof MANAGED_TEAM_ROLES)[number] | "none";
 
 export type TeamMember = {
   userId: string;
@@ -89,21 +98,23 @@ async function getFullTeamRoster(organizationId: string): Promise<Result<TeamMem
   const roleHolders = new Set((roleRows ?? []).map((row) => row.user_id));
   const staffHolders = new Set((staffRows ?? []).map((row) => row.user_id));
 
-  const admins: TeamMember[] = (roleRows ?? [])
-    .filter((row) => {
+  const managed: TeamMember[] = (roleRows ?? [])
+    .flatMap((row) => {
       const role = Array.isArray(row.role) ? row.role[0] : row.role;
-      return role?.slug === "admin";
-    })
-    .map((row) => {
+      const slug = role?.slug;
+      if (!slug || !(MANAGED_TEAM_ROLES as readonly string[]).includes(slug)) return [];
+
       const user = one(row.user);
-      return {
-        userId: row.user_id,
-        fullName: user?.full_name ?? "Unknown",
-        email: user?.email ?? "",
-        phone: user?.phone ?? null,
-        role: "admin" as const,
-        hasStaffRecord: staffHolders.has(row.user_id),
-      };
+      return [
+        {
+          userId: row.user_id,
+          fullName: user?.full_name ?? "Unknown",
+          email: user?.email ?? "",
+          phone: user?.phone ?? null,
+          role: slug as TeamRole,
+          hasStaffRecord: staffHolders.has(row.user_id),
+        },
+      ];
     });
 
   const pending: TeamMember[] = (staffRows ?? [])
@@ -122,7 +133,7 @@ async function getFullTeamRoster(organizationId: string): Promise<Result<TeamMem
 
   return {
     status: "ok",
-    data: [...admins, ...pending].sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    data: [...managed, ...pending].sort((a, b) => a.fullName.localeCompare(b.fullName)),
   };
 }
 

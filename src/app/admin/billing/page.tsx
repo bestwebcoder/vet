@@ -7,6 +7,7 @@ import { DateRangeFilter } from "@/components/search/date-range-filter";
 import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listDoctors } from "@/features/doctors/queries";
 import { listInvoicesForOrg, type InvoiceStatus } from "@/features/invoices/queries";
@@ -25,7 +26,7 @@ const STATUS_FILTERS: { value: InvoiceStatus | ""; label: string }[] = [
 ];
 
 export default async function AdminBillingPage({ searchParams }: PageProps<"/admin/billing">) {
-  const user = await requireRole("admin", "super_admin");
+  const user = await requireRole(...ACCESS.finance);
   const { status, from, to, page: pageParam } = await searchParams;
   const activeStatus = typeof status === "string" ? (status as InvoiceStatus) : undefined;
   const from_ = typeof from === "string" ? from : undefined;

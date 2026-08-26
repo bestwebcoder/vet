@@ -8,6 +8,7 @@ import { AppointmentStatusActions } from "@/components/appointments/status-actio
 import { RescheduleDialog } from "@/components/appointments/reschedule-dialog";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { getAppointment, listAppointmentStatuses } from "@/features/appointments/queries";
 import { VISIT_TYPE_LABELS, type VisitType } from "@/lib/validation/appointment";
@@ -17,7 +18,7 @@ export const metadata: Metadata = { title: "Appointment · TV Care" };
 export default async function AdminAppointmentDetailPage({
   params,
 }: PageProps<"/admin/appointments/[appointmentId]">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.reception);
   const { appointmentId } = await params;
 
   const result = await getAppointment(appointmentId);

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listPaymentsForOrg } from "@/features/payments/queries";
 import type { PaymentInput } from "@/lib/validation/payment";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 export const metadata: Metadata = { title: "Payments · TV Care" };
 
 export default async function AdminPaymentsPage({ searchParams }: PageProps<"/admin/payments">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.finance);
 
   const { method, from, to, page: pageParam } = await searchParams;
   const activeMethod = typeof method === "string" ? (method as PaymentInput["method"]) : undefined;

@@ -102,9 +102,11 @@ export async function organizationId() {
 }
 
 /** Creates an account with a role granted directly, as an admin invite would. */
+export type TestRole = "client" | "doctor" | "admin" | "finance_manager" | "lab" | "receptionist";
+
 export async function createUserWithRole(
   label: string,
-  role: "client" | "doctor" | "admin" | null,
+  role: TestRole | null,
 ): Promise<{ email: string; userId: string }> {
   const email = `${label}@tvcare.test`;
 

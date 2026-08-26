@@ -6,13 +6,14 @@ import Link from "next/link";
 import { SearchField } from "@/components/search/search-field";
 import { EmptyState } from "@/components/states/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { globalSearch } from "@/features/search/queries";
 
 export const metadata: Metadata = { title: "Search · TV Care" };
 
 export default async function AdminSearchPage({ searchParams }: PageProps<"/admin/search">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.shared);
   const { q } = await searchParams;
   const term = typeof q === "string" ? q : "";
 

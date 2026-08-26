@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { InvoiceDetailView } from "@/components/invoices/invoice-detail";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { getInvoice, signedInvoicePdfUrl } from "@/features/invoices/queries";
 import { listPaymentsForInvoice } from "@/features/payments/queries";
@@ -13,7 +14,7 @@ import { listServices } from "@/features/services/queries";
 export const metadata: Metadata = { title: "Invoice · TV Care" };
 
 export default async function AdminInvoiceDetailPage({ params }: PageProps<"/admin/invoices/[invoiceId]">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.finance);
   const { invoiceId } = await params;
 
   const result = await getInvoice(invoiceId);

@@ -6,13 +6,14 @@ import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listContactMessages } from "@/features/contact/queries";
 
 export const metadata: Metadata = { title: "Messages · TV Care" };
 
 export default async function AdminMessagesPage({ searchParams }: PageProps<"/admin/messages">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.reception);
 
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;

@@ -8,13 +8,9 @@ import { SelectField } from "@/components/form/select-field";
 import { SubmitButton } from "@/components/form/submit-button";
 import { inviteTeamMemberAction } from "@/features/team/actions";
 import { idleState } from "@/lib/forms";
+import { roleOptions } from "@/lib/validation/team";
 
-const ROLE_OPTIONS = [
-  { value: "none", label: "No role yet" },
-  { value: "client", label: "Client" },
-  { value: "doctor", label: "Doctor" },
-  { value: "admin", label: "Admin" },
-];
+const ROLE_OPTIONS = roleOptions("No role yet");
 
 /** A real Supabase Auth invite — they set their own password from the emailed link. */
 export function InviteTeamMemberForm({ onDone }: { onDone?: () => void }) {

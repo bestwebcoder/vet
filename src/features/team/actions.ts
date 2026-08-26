@@ -77,12 +77,12 @@ async function grantTeamRole(
     }
   }
 
-  if (role === "admin") {
-    // Every admin needs a staff row backing them, or deactivating them later
-    // (role -> "none") drops them out of getTeamRoster entirely: neither an
-    // active admin nor a pending staff record, unreachable from this page
-    // afterwards. Doctor/client each already get their own backing row
-    // above for the same reason — this closes the same gap for admin.
+  if (role === "admin" || role === "finance_manager" || role === "lab" || role === "receptionist") {
+    // Every clinic-side, non-doctor role needs a staff row backing it, or
+    // deactivating them later (role -> "none") drops them out of
+    // getTeamRoster entirely: neither an active member nor a pending staff
+    // record, unreachable from this page afterwards. Doctor/client each
+    // already get their own backing row above for the same reason.
     const { data: existingStaff } = await supabase
       .from("staff")
       .select("id")

@@ -51,7 +51,7 @@ describe("migrations", () => {
 });
 
 describe("seeded reference data", () => {
-  it("seeds exactly the four roles", async () => {
+  it("seeds exactly the seven roles", async () => {
     const { data, error } = await admin.from("roles").select("slug, is_assignable_in_ui");
 
     expect(error).toBeNull();
@@ -59,6 +59,9 @@ describe("seeded reference data", () => {
       "admin",
       "client",
       "doctor",
+      "finance_manager",
+      "lab",
+      "receptionist",
       "super_admin",
     ]);
   });

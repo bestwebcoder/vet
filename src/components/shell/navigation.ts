@@ -35,7 +35,20 @@ export type NavItem = {
    * is what the brief asks for.
    */
   phase?: number;
+  /**
+   * Which roles see this item. Omitted means administrators only, which is
+   * what every /admin entry meant before the narrower clinic-side roles
+   * existed — so an item added without thinking about them stays hidden
+   * rather than silently appearing in a receptionist's menu.
+   *
+   * Hiding an item is a courtesy, not a control: the page behind it guards
+   * itself with requireRole, and row level security decides what any of them
+   * can actually read.
+   */
+  roles?: RoleSlug[];
 };
+
+const ADMINS: RoleSlug[] = ["admin", "super_admin"];
 
 /** Navigation per CLAUDE.md §8. Order is the order it appears. */
 
@@ -70,20 +83,26 @@ export const DOCTOR_NAV: NavItem[] = [
   { label: "Reports", href: "/doctor/reports", icon: FileText },
 ];
 
+/**
+ * One menu, filtered per role — see navFor(). Administrators see all of it;
+ * the three narrower roles see the slice their own work needs, matching the
+ * policies in 20260917000100_staff_roles.sql.
+ */
 export const ADMIN_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
-  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays },
+  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: [...ADMINS, "finance_manager", "lab", "receptionist"] },
+  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays, roles: [...ADMINS, "receptionist"] },
   { label: "Clients", href: "/admin/clients", icon: Users },
   { label: "Patients", href: "/admin/patients", icon: PawPrint },
-  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope },
-  { label: "Services", href: "/admin/services", icon: ClipboardList },
-  { label: "Billing", href: "/admin/billing", icon: CreditCard },
-  { label: "Payments", href: "/admin/payments", icon: Wallet },
-  { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe },
-  { label: "Deworming", href: "/admin/deworming", icon: Worm },
-  { label: "Reports", href: "/admin/reports", icon: FileText },
-  { label: "Notifications", href: "/admin/notifications", icon: Bell },
-  { label: "Messages", href: "/admin/messages", icon: MessageSquare },
+  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, roles: [...ADMINS, "receptionist"] },
+  { label: "Services", href: "/admin/services", icon: ClipboardList, roles: [...ADMINS, "receptionist"] },
+  { label: "Lab", href: "/admin/lab", icon: FlaskConical, roles: [...ADMINS, "lab"] },
+  { label: "Billing", href: "/admin/billing", icon: CreditCard, roles: [...ADMINS, "finance_manager"] },
+  { label: "Payments", href: "/admin/payments", icon: Wallet, roles: [...ADMINS, "finance_manager"] },
+  { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe, roles: [...ADMINS, "receptionist"] },
+  { label: "Deworming", href: "/admin/deworming", icon: Worm, roles: [...ADMINS, "receptionist"] },
+  { label: "Reports", href: "/admin/reports", icon: FileText, roles: [...ADMINS, "finance_manager"] },
+  { label: "Notifications", href: "/admin/notifications", icon: Bell, roles: [...ADMINS, "receptionist"] },
+  { label: "Messages", href: "/admin/messages", icon: MessageSquare, roles: [...ADMINS, "receptionist"] },
   { label: "Team", href: "/admin/team", icon: UserCog },
   { label: "Website", href: "/admin/website", icon: Globe },
   { label: "Settings", href: "/admin/settings", icon: Settings },
@@ -121,11 +140,20 @@ export const AREAS: Record<Area["key"], Area> = {
     label: "Administration",
     href: "/admin",
     nav: ADMIN_NAV,
-    // super_admin is architecture only; it is not given its own area yet.
-    roles: ["admin", "super_admin"],
+    // super_admin is architecture only; it is not given its own area yet. The
+    // three narrower roles share this area and are filtered by navFor().
+    roles: ["admin", "super_admin", "finance_manager", "lab", "receptionist"],
     icon: Shield,
   },
 };
+
+/**
+ * The items this person may see in an area. An item with no `roles` is
+ * administrators-only; anything else lists the roles it belongs to.
+ */
+export function navFor(area: Area["key"], roles: RoleSlug[]): NavItem[] {
+  return AREAS[area].nav.filter((item) => (item.roles ?? ADMINS).some((role) => roles.includes(role)));
+}
 
 /** Looks up a navigation item by exact path, for the coming-soon fallback. */
 export function findNavItem(area: Area["key"], pathname: string): NavItem | undefined {

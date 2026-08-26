@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listSpecies } from "@/features/pets/queries";
 import { listAllSchedules } from "@/features/vaccination-schedules/queries";
@@ -19,7 +20,7 @@ export const metadata: Metadata = { title: "Vaccinations · TV Care" };
 const PAGE_SIZE = 25;
 
 export default async function AdminVaccinationsPage({ searchParams }: PageProps<"/admin/vaccinations">) {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.reception);
 
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;

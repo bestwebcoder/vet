@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { NavLinks } from "@/components/shell/nav-links";
 import { AREAS, type Area } from "@/components/shell/navigation";
+import type { RoleSlug } from "@/features/auth/session";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -15,7 +16,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-export function MobileNav({ areaKey }: { areaKey: Area["key"] }) {
+export function MobileNav({ areaKey, roles }: { areaKey: Area["key"]; roles: RoleSlug[] }) {
   const [open, setOpen] = useState(false);
   const areaLabel = AREAS[areaKey].label;
 
@@ -34,7 +35,7 @@ export function MobileNav({ areaKey }: { areaKey: Area["key"] }) {
           <SheetDescription>{areaLabel}</SheetDescription>
         </SheetHeader>
         <div className="overflow-y-auto p-3">
-          <NavLinks areaKey={areaKey} onNavigate={() => setOpen(false)} />
+          <NavLinks areaKey={areaKey} roles={roles} onNavigate={() => setOpen(false)} />
         </div>
       </SheetContent>
     </Sheet>

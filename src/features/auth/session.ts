@@ -14,11 +14,36 @@ import { createClient } from "@/lib/supabase/server";
  * a clear error message, never the security boundary.
  */
 
-export type RoleSlug = "client" | "doctor" | "admin" | "super_admin";
+export type RoleSlug =
+  | "client"
+  | "doctor"
+  | "admin"
+  | "super_admin"
+  | "finance_manager"
+  | "lab"
+  | "receptionist";
 
-/** Areas of the app, most privileged first. Order drives the landing redirect. */
+/**
+ * The narrower clinic-side roles. They share the /admin area with admins but
+ * see only their own navigation and reach only their own pages — what they can
+ * actually read is decided by row level security (see
+ * 20260917000100_staff_roles.sql), so this list drives menus and redirects, not
+ * security.
+ */
+export const SUPPORT_ROLES = ["finance_manager", "lab", "receptionist"] as const satisfies readonly RoleSlug[];
+
+/**
+ * Areas of the app, most privileged first. Order drives the landing redirect.
+ *
+ * The three support roles share /admin with admins, so they sit below admin
+ * and above doctor: someone holding both admin and one of these lands on the
+ * same page either way, and a support role alone still lands somewhere real.
+ */
 export const ROLE_AREAS = [
   { role: "admin", href: "/admin" },
+  { role: "finance_manager", href: "/admin" },
+  { role: "lab", href: "/admin" },
+  { role: "receptionist", href: "/admin" },
   { role: "doctor", href: "/doctor" },
   { role: "client", href: "/client" },
 ] as const satisfies readonly { role: RoleSlug; href: string }[];

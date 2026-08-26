@@ -24,13 +24,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { deleteTeamMemberAction, setTeamRoleAction } from "@/features/team/actions";
 import type { TeamMember } from "@/features/team/queries";
 import { idleState } from "@/lib/forms";
+import { roleOptions } from "@/lib/validation/team";
 
-const ROLE_OPTIONS = [
-  { value: "none", label: "No role" },
-  { value: "client", label: "Client" },
-  { value: "doctor", label: "Doctor" },
-  { value: "admin", label: "Admin" },
-];
+const ROLE_OPTIONS = roleOptions("No role");
 
 function SaveButton() {
   const { pending } = useFormStatus();

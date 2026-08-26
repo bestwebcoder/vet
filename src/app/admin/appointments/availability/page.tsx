@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DoctorAvailabilityCard } from "@/components/appointments/availability-manager";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listAvailabilityForDoctor } from "@/features/appointments/queries";
 import { listBranches } from "@/features/clients/queries";
@@ -12,7 +13,7 @@ import { listDoctors } from "@/features/doctors/queries";
 export const metadata: Metadata = { title: "Doctor availability · TV Care" };
 
 export default async function AvailabilityAdminPage() {
-  await requireRole("admin", "super_admin");
+  await requireRole(...ACCESS.reception);
 
   const [doctors, branches] = await Promise.all([listDoctors(), listBranches()]);
 

@@ -19,6 +19,7 @@ import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { countAppointments } from "@/features/appointments/queries";
 import { getAdminOperationalSummary, getAdminOverview, getAdminRevenue, getRecentActivity, type Metric } from "@/features/dashboard/queries";
+import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
 import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
@@ -26,7 +27,7 @@ import { formatCurrency } from "@/lib/currency";
 import { getDueInfo } from "@/lib/due-window";
 
 export default async function AdminDashboardPage() {
-  const user = await requireRole("admin", "super_admin");
+  const user = await requireRole(...ACCESS.shared);
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
