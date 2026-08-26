@@ -3,8 +3,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import {
   admin,
+  createOrganization,
   createUserWithRole,
-  organizationId,
   runId,
   Session,
   signedInClient,
@@ -37,7 +37,7 @@ const PET_NAME = `Chandu${RUN}`;
 const OTHER_PET = `Elsewhere${RUN}`;
 
 beforeAll(async () => {
-  orgA = await organizationId();
+  orgA = await createOrganization(`clinic-${RUN}`);
 
   const { data: other, error: orgError } = await admin
     .from("organizations")
@@ -48,9 +48,9 @@ beforeAll(async () => {
   orgB = other.id;
 
   const [adminUser, doctorUser, otherDoctor] = await Promise.all([
-    createUserWithRole(`clinic-admin-${RUN}`, "admin"),
-    createUserWithRole(`clinic-doctor-${RUN}`, "doctor"),
-    createUserWithRole(`clinic-otherdoc-${RUN}`, null),
+    createUserWithRole(`clinic-admin-${RUN}`, "admin", orgA),
+    createUserWithRole(`clinic-doctor-${RUN}`, "doctor", orgA),
+    createUserWithRole(`clinic-otherdoc-${RUN}`, null, orgA),
   ]);
   doctorUserId = doctorUser.userId;
 

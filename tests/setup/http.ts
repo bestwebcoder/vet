@@ -101,12 +101,42 @@ export async function organizationId() {
   return data!.id as string;
 }
 
+/**
+ * A practice of this run's own, with its primary branch.
+ *
+ * Prefer this over organizationId() for anything that counts, sums or asserts
+ * a unique row. Fixtures cannot be cleaned up afterwards — foreign keys
+ * restrict and audit_logs is append-only by design — so a suite that shares
+ * the seeded practice accumulates every previous run's data inside it, and any
+ * assertion about totals, list position or uniqueness starts failing on the
+ * second run against the same database.
+ */
+export async function createOrganization(label: string): Promise<string> {
+  const slug = `test-${label}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  const { data, error } = await admin
+    .from("organizations")
+    .insert({ name: `Test ${label}`, slug, legal_name: `Test ${label}`, city: "Dhaka" })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const { error: branchError } = await admin
+    .from("branches")
+    .insert({ organization_id: data!.id, name: "Main", slug: "main", is_primary: true, city: "Dhaka" });
+  if (branchError) throw branchError;
+
+  return data!.id as string;
+}
+
 /** Creates an account with a role granted directly, as an admin invite would. */
 export type TestRole = "client" | "doctor" | "admin" | "finance_manager" | "lab" | "receptionist";
 
 export async function createUserWithRole(
   label: string,
   role: TestRole | null,
+  /** Which practice to grant the role in. Defaults to the seeded one. */
+  inOrganization?: string,
 ): Promise<{ email: string; userId: string }> {
   const email = `${label}@tvcare.test`;
 
@@ -120,7 +150,7 @@ export async function createUserWithRole(
 
   if (role) {
     const [org, { data: roleRow }] = await Promise.all([
-      organizationId(),
+      inOrganization ? Promise.resolve(inOrganization) : organizationId(),
       admin.from("roles").select("id").eq("slug", role).single(),
     ]);
 

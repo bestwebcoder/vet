@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { admin, createUserWithRole, organizationId, runId, signedInClient } from "./setup/http";
+import { admin, createOrganization, createUserWithRole, runId, signedInClient } from "./setup/http";
 
 /**
  * Phase 9 · Checkpoint 1 — real delivery channels.
@@ -79,13 +79,13 @@ async function finalizeSoap(appointmentId: string) {
 }
 
 beforeAll(async () => {
-  orgA = await organizationId();
+  orgA = await createOrganization(`notif-${RUN}`);
 
   const [userA, userB, vetA, adminUser] = await Promise.all([
-    createUserWithRole(`notif-a-${RUN}`, "client"),
-    createUserWithRole(`notif-b-${RUN}`, "client"),
-    createUserWithRole(`notif-vet-${RUN}`, "doctor"),
-    createUserWithRole(`notif-admin-${RUN}`, "admin"),
+    createUserWithRole(`notif-a-${RUN}`, "client", orgA),
+    createUserWithRole(`notif-b-${RUN}`, "client", orgA),
+    createUserWithRole(`notif-vet-${RUN}`, "doctor", orgA),
+    createUserWithRole(`notif-admin-${RUN}`, "admin", orgA),
   ]);
   userIdA = userA.userId;
 

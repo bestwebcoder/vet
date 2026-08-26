@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { admin, createUserWithRole, organizationId, runId, signedInClient } from "./setup/http";
+import { admin, createOrganization, createUserWithRole, runId, signedInClient } from "./setup/http";
 import { toCsv } from "@/lib/csv";
 
 /**
@@ -52,15 +52,15 @@ function at(dateIso: string, hour: number) {
 }
 
 beforeAll(async () => {
-  orgA = await organizationId();
+  orgA = await createOrganization(`reports-${RUN}`);
 
   const [userA, userB, userC, vetA, vetReportsA, adminUser] = await Promise.all([
-    createUserWithRole(`rep-a-${RUN}`, "client"),
-    createUserWithRole(`rep-b-${RUN}`, "client"),
-    createUserWithRole(`rep-c-${RUN}`, "client"),
-    createUserWithRole(`rep-vet-${RUN}`, "doctor"),
-    createUserWithRole(`rep-vet-reports-${RUN}`, "doctor"),
-    createUserWithRole(`rep-admin-${RUN}`, "admin"),
+    createUserWithRole(`rep-a-${RUN}`, "client", orgA),
+    createUserWithRole(`rep-b-${RUN}`, "client", orgA),
+    createUserWithRole(`rep-c-${RUN}`, "client", orgA),
+    createUserWithRole(`rep-vet-${RUN}`, "doctor", orgA),
+    createUserWithRole(`rep-vet-reports-${RUN}`, "doctor", orgA),
+    createUserWithRole(`rep-admin-${RUN}`, "admin", orgA),
   ]);
 
   const [{ data: clientA }, { data: clientB }, { data: clientC }, { data: doctorRow }] = await Promise.all([
@@ -75,6 +75,10 @@ beforeAll(async () => {
   clientRecordB = clientB!.id;
   clientRecordC = clientC!.id;
   doctorRecordA = doctorRow!.id;
+
+  // A practice of our own starts with no services, and insertAppointment needs
+  // one to point at.
+  await admin.from("services").insert({ organization_id: orgA, name: `Report Base ${RUN}`, price_paisa: 1_000 });
 
   const { data: dogSpecies } = await admin.from("species").select("id").eq("slug", "dog").single();
   const { data: catSpecies } = await admin.from("species").select("id").eq("slug", "cat").single();
