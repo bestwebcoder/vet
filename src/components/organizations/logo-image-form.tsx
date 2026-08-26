@@ -31,6 +31,7 @@ export function LogoImageForm({ logoUrl }: { logoUrl: string | null }) {
             aspect={1}
             outputWidth={256}
             outputHeight={256}
+            outputMimeType="image/png"
             previewUrl={logoUrl}
             previewAlt="Current logo"
           />

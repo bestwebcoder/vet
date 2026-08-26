@@ -25,7 +25,22 @@ export function validateImageFile(file: File): string | null {
   return null;
 }
 
-export function cropImageToBlob(imageSrc: string, area: Area, outputWidth: number, outputHeight: number): Promise<Blob> {
+/**
+ * JPEG has no alpha channel — exporting a transparent-background PNG (a
+ * logo, say) through it flattens every transparent pixel to an opaque
+ * color, which is why that logo comes out with a black background instead
+ * of staying transparent. Callers whose source may have real transparency
+ * to keep (the logo form) pass "image/png"; everything else keeps the
+ * smaller JPEG output, since photo content (doctor/pet/hero photos) has no
+ * alpha to lose.
+ */
+export function cropImageToBlob(
+  imageSrc: string,
+  area: Area,
+  outputWidth: number,
+  outputHeight: number,
+  mimeType: "image/jpeg" | "image/png" = "image/jpeg",
+): Promise<Blob> {
   return loadImage(imageSrc).then(
     (image) =>
       new Promise<Blob>((resolve, reject) => {
@@ -43,8 +58,8 @@ export function cropImageToBlob(imageSrc: string, area: Area, outputWidth: numbe
 
         canvas.toBlob(
           (blob) => (blob ? resolve(blob) : reject(new Error("Could not export the cropped image"))),
-          "image/jpeg",
-          0.9,
+          mimeType,
+          mimeType === "image/jpeg" ? 0.9 : undefined,
         );
       }),
   );

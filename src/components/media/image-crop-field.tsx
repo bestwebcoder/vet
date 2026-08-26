@@ -23,6 +23,8 @@ export type ImageCropFieldProps = {
   shape?: "rect" | "round";
   previewUrl?: string | null;
   previewAlt?: string;
+  /** "image/png" keeps transparency (a logo on a colored header); JPEG (the default) flattens it to a solid color, which is fine for a photo but not for a transparent-background graphic. */
+  outputMimeType?: "image/jpeg" | "image/png";
 };
 
 /**
@@ -46,6 +48,7 @@ export function ImageCropField({
   shape = "rect",
   previewUrl = null,
   previewAlt = "",
+  outputMimeType = "image/jpeg",
 }: ImageCropFieldProps) {
   const reactId = useId();
   const inputId = id ?? reactId;
@@ -117,8 +120,9 @@ export function ImageCropField({
 
     setBusy(true);
     try {
-      const blob = await cropImageToBlob(rawImage, croppedArea, outputWidth, outputHeight);
-      const file = new File([blob], `${name}.jpg`, { type: blob.type });
+      const blob = await cropImageToBlob(rawImage, croppedArea, outputWidth, outputHeight, outputMimeType);
+      const extension = outputMimeType === "image/png" ? "png" : "jpg";
+      const file = new File([blob], `${name}.${extension}`, { type: blob.type });
 
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
