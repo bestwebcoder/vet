@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 
-export { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
+export { MAX_HERO_IMAGES, MAX_HERO_CAPTION_LENGTH } from "@/features/organizations/hero-image-constants";
 
 /**
  * The front page hero carousel's slides — an ordered gallery an admin

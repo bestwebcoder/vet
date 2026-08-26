@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole } from "@/features/auth/session";
 import {
   describeHeroImageProblem,
+  MAX_HERO_CAPTION_LENGTH,
   MAX_HERO_IMAGES,
   readHeroImage,
   removeHeroImageObject,
@@ -200,6 +201,34 @@ export async function deleteHeroImageAction(_previous: FormState, formData: Form
   revalidatePath("/admin/settings");
   revalidatePath("/");
   return { status: "success", message: "Hero image removed." };
+}
+
+/** The short line shown over one hero slide in the public carousel — optional, blank clears it. */
+export async function updateHeroImageCaptionAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const heroImageId = text(formData, "heroImageId");
+  if (!heroImageId) return { status: "error", message: "We could not tell which image to update." };
+
+  const parsed = optionalText(MAX_HERO_CAPTION_LENGTH, "Caption").safeParse(text(formData, "caption") ?? "");
+  if (!parsed.success) return invalid(parsed.error);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("organization_hero_images")
+    .update({ caption: parsed.data })
+    .eq("id", heroImageId)
+    .eq("organization_id", organizationId);
+
+  if (error) {
+    return failure("organizations", error, "We could not save that caption just now. Please try again.");
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  return { status: "success", message: "Caption saved." };
 }
 
 /** The practice logo shown in the site header on every public page — see the site-images bucket. */

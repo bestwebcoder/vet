@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-export type HeroCarouselImage = { src: string; alt: string };
+export type HeroCarouselImage = { src: string; alt: string; caption?: string | null };
 
 /**
  * A small auto-advancing crossfade carousel for the front page hero.
@@ -36,17 +36,26 @@ export function HeroCarousel({ images }: { images: HeroCarouselImage[] }) {
       onBlur={() => setPaused(false)}
     >
       {images.map((image, i) => (
-        // eslint-disable-next-line @next/next/no-img-element -- arbitrary-dimension public images (org hero, doctor photos); no build-time optimization to gain here.
-        <img
+        <div
           key={image.src}
-          src={image.src}
-          alt={image.alt}
-          loading={i === 0 ? "eager" : "lazy"}
           className={cn(
-            "absolute inset-0 size-full object-cover transition-opacity duration-700",
+            "absolute inset-0 size-full transition-opacity duration-700",
             i === index ? "opacity-100" : "opacity-0",
           )}
-        />
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary-dimension public images (org hero, doctor photos); no build-time optimization to gain here. */}
+          <img
+            src={image.src}
+            alt={image.alt}
+            loading={i === 0 ? "eager" : "lazy"}
+            className="size-full object-cover"
+          />
+          {image.caption ? (
+            <p className="from-foreground/70 absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t to-transparent px-4 pt-10 pb-8 text-sm font-medium text-white sm:text-base">
+              {image.caption}
+            </p>
+          ) : null}
+        </div>
       ))}
 
       {images.length > 1 ? (

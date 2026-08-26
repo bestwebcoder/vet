@@ -87,7 +87,7 @@ export async function getOwnOrganization(organizationId: string): Promise<Result
   return { status: "ok", data: data ? toOrganization(data) : null };
 }
 
-export type OrganizationHeroImage = { id: string; url: string };
+export type OrganizationHeroImage = { id: string; url: string; caption: string | null };
 
 /** The front page hero carousel's slides, in upload order — the gallery an admin builds up from Settings. */
 export async function getOrganizationHeroImages(organizationId: string): Promise<Result<OrganizationHeroImage[]>> {
@@ -95,7 +95,7 @@ export async function getOrganizationHeroImages(organizationId: string): Promise
 
   const { data, error } = await supabase
     .from("organization_hero_images")
-    .select("id, image_path")
+    .select("id, image_path, caption")
     .eq("organization_id", organizationId)
     .order("position", { ascending: true });
 
@@ -106,7 +106,7 @@ export async function getOrganizationHeroImages(organizationId: string): Promise
 
   return {
     status: "ok",
-    data: (data ?? []).map((row) => ({ id: row.id, url: siteImagePublicUrl(row.image_path) })),
+    data: (data ?? []).map((row) => ({ id: row.id, url: siteImagePublicUrl(row.image_path), caption: row.caption })),
   };
 }
 
@@ -118,7 +118,7 @@ export type PublicOrganizationInfo = {
   whatsappNumber: string | null;
   address: string | null;
   city: string | null;
-  heroImages: { src: string; alt: string }[];
+  heroImages: { src: string; alt: string; caption: string | null }[];
   logoUrl: string | null;
 };
 
@@ -151,7 +151,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data: heroRows, error: heroError } = await supabase
     .from("organization_hero_images")
-    .select("image_path")
+    .select("image_path, caption")
     .eq("organization_id", data.id)
     .order("position", { ascending: true })
     .limit(MAX_HERO_IMAGES);
@@ -168,7 +168,11 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     whatsappNumber: data.whatsapp_number,
     address: data.address,
     city: data.city,
-    heroImages: (heroRows ?? []).map((row) => ({ src: siteImagePublicUrl(row.image_path), alt: "" })),
+    heroImages: (heroRows ?? []).map((row) => ({
+      src: siteImagePublicUrl(row.image_path),
+      alt: row.caption ?? "",
+      caption: row.caption,
+    })),
     logoUrl: data.logo_path ? siteImagePublicUrl(data.logo_path, data.updated_at) : null,
   };
 }

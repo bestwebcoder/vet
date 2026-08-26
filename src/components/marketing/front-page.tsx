@@ -104,7 +104,7 @@ export function FrontPage({
       : doctors
           .filter((doctor) => doctor.photoUrl)
           .slice(0, MAX_HERO_IMAGES)
-          .map((doctor) => ({ src: doctor.photoUrl!, alt: "" }));
+          .map((doctor) => ({ src: doctor.photoUrl!, alt: "", caption: null }));
 
   return (
     <div className="flex min-h-svh flex-col">
