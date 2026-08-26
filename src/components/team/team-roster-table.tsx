@@ -121,7 +121,7 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
         ) : null}
       </TableCell>
       <TableCell>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-col items-stretch gap-2">
           <AdminEditIdentityDialog targetUserId={member.userId} fullName={member.fullName} phone={member.phone} />
           <AdminChangeEmailDialog targetUserId={member.userId} targetName={member.fullName} email={member.email} />
           <AdminSetPasswordDialog targetUserId={member.userId} targetName={member.fullName} />
