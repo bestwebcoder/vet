@@ -40,11 +40,12 @@ export type Organization = {
   quietHoursEnd: string | null;
   logoPath: string | null;
   logoUrl: string | null;
+  footerShowLogo: boolean;
 };
 
 const ORGANIZATION_COLUMNS = `
   id, name, legal_name, timezone, email, phone, whatsapp_number, address, city, country, is_active,
-  payment_instructions, quiet_hours_start, quiet_hours_end, logo_path, updated_at
+  payment_instructions, quiet_hours_start, quiet_hours_end, logo_path, footer_show_logo, updated_at
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -66,6 +67,7 @@ function toOrganization(row: any): Organization {
     quietHoursEnd: row.quiet_hours_end,
     logoPath: row.logo_path,
     logoUrl: row.logo_path ? siteImagePublicUrl(row.logo_path, row.updated_at) : null,
+    footerShowLogo: row.footer_show_logo,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -120,6 +122,7 @@ export type PublicOrganizationInfo = {
   city: string | null;
   heroImages: { src: string; alt: string; caption: string | null }[];
   logoUrl: string | null;
+  footerShowLogo: boolean;
 };
 
 /**
@@ -135,7 +138,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, phone, email, whatsapp_number, address, city, logo_path, updated_at")
+    .select("id, name, phone, email, whatsapp_number, address, city, logo_path, footer_show_logo, updated_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -174,5 +177,6 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
       caption: row.caption,
     })),
     logoUrl: data.logo_path ? siteImagePublicUrl(data.logo_path, data.updated_at) : null,
+    footerShowLogo: data.footer_show_logo,
   };
 }

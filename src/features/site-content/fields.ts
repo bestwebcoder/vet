@@ -7,7 +7,7 @@
 
 export type SiteContentField = {
   key: string;
-  page: "Home" | "About" | "Services" | "Contact";
+  page: "Home" | "About" | "Services" | "Contact" | "Footer";
   label: string;
   multiline?: boolean;
   defaultValue: (practiceName: string) => string;
@@ -70,6 +70,20 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
     label: "Introduction",
     multiline: true,
     defaultValue: () => "Have a question before booking? Send us a message and we'll get back to you.",
+  },
+  {
+    key: "footer.tagline",
+    page: "Footer",
+    label: "Tagline",
+    multiline: true,
+    // Empty by default — nothing shows rather than inventing marketing copy.
+    defaultValue: () => "",
+  },
+  {
+    key: "footer.copyright_override",
+    page: "Footer",
+    label: "Copyright line",
+    defaultValue: (name) => `© ${new Date().getFullYear()} ${name}.`,
   },
 ];
 

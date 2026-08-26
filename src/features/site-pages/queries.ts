@@ -14,7 +14,6 @@ export type SitePageSummary = {
   id: string;
   title: string;
   slug: string;
-  showInNav: boolean;
   isPublished: boolean;
   blockCount: number;
 };
@@ -62,7 +61,7 @@ function toBlock(row: any): SitePageBlock {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-const PAGE_COLUMNS = "id, title, slug, show_in_nav, is_published, site_page_blocks(count)";
+const PAGE_COLUMNS = "id, title, slug, is_published, site_page_blocks(count)";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by PAGE_COLUMNS above */
 function toSummary(row: any): SitePageSummary {
@@ -71,7 +70,6 @@ function toSummary(row: any): SitePageSummary {
     id: row.id,
     title: row.title,
     slug: row.slug,
-    showInNav: row.show_in_nav,
     isPublished: row.is_published,
     blockCount,
   };
@@ -145,26 +143,4 @@ export async function getPublicSitePage(organizationId: string, slug: string): P
   }
 
   return { title: page.title, blocks: (blockRows ?? []).map(toBlock) };
-}
-
-export type PublicNavPage = { href: string; label: string };
-
-/** Custom pages to append to PUBLIC_NAV_LINKS — published and opted into nav. */
-export async function getPublicNavPages(organizationId: string): Promise<PublicNavPage[]> {
-  const supabase = createServiceClient();
-
-  const { data, error } = await supabase
-    .from("site_pages")
-    .select("title, slug")
-    .eq("organization_id", organizationId)
-    .eq("is_published", true)
-    .eq("show_in_nav", true)
-    .order("title");
-
-  if (error) {
-    console.error("[site-pages] public nav failed", error);
-    return [];
-  }
-
-  return (data ?? []).map((row) => ({ href: `/${row.slug}`, label: row.title }));
 }

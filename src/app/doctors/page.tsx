@@ -21,7 +21,7 @@ export default async function DoctorsPage() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} />
+      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} organizationId={organization?.id ?? null} />
 
       <main className="flex-1">
         <section className="mx-auto w-full max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-24">

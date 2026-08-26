@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -41,6 +41,32 @@ export default async function AdminWebsitePage() {
         <h1>Website</h1>
         <p className="text-muted-foreground">The headline and body text shown on the public marketing site.</p>
       </div>
+
+      <Link href="/admin/website/navigation" className="block">
+        <Card className="transition-colors hover:bg-muted/50">
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <div className="grid gap-1.5">
+              <CardTitle className="text-base">Navigation</CardTitle>
+              <CardDescription>What shows in the header, mobile menu and footer — reorder items and build dropdowns.</CardDescription>
+            </div>
+            <ChevronRight className="text-muted-foreground size-5 shrink-0" aria-hidden />
+          </CardHeader>
+        </Card>
+      </Link>
+
+      <Link href="/admin/website/home-sections" className="block">
+        <Card className="transition-colors hover:bg-muted/50">
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <div className="grid gap-1.5">
+              <CardTitle className="text-base">Home page sections</CardTitle>
+              <CardDescription>
+                &ldquo;What we offer&rdquo;, &ldquo;Why pet owners choose&rdquo; and &ldquo;How it works&rdquo; — reorder items and edit their text.
+              </CardDescription>
+            </div>
+            <ChevronRight className="text-muted-foreground size-5 shrink-0" aria-hidden />
+          </CardHeader>
+        </Card>
+      </Link>
 
       <Card>
         <CardHeader>

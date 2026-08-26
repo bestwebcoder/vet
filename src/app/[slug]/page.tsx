@@ -28,7 +28,7 @@ export default async function CustomSitePage({ params }: PageProps<"/[slug]">) {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} logoUrl={organization.logoUrl} />
+      <PublicHeader practiceName={practiceName} logoUrl={organization.logoUrl} organizationId={organization.id} />
 
       <main className="flex-1">
         <div className="mx-auto w-full max-w-3xl px-4 pt-16 text-center sm:px-6">

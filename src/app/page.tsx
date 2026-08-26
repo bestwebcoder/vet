@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
 import { getPublicDoctors } from "@/features/doctors/queries";
+import { getPublicHomeSectionItems } from "@/features/home-sections/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 import { getPublicSiteContent } from "@/features/site-content/queries";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
@@ -27,7 +28,12 @@ export default async function RootPage() {
 
   if (!user || home) {
     const [organization, doctorsResult] = await Promise.all([getPublicOrganizationInfo(), getPublicDoctors()]);
-    const content = organization ? await getPublicSiteContent(organization.id) : {};
+    const [content, homeSections] = await Promise.all([
+      organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
+      organization
+        ? getPublicHomeSectionItems(organization.id)
+        : Promise.resolve({ services: [], why: [], how_it_works: [] }),
+    ]);
     const doctors = doctorsResult.status === "ok" ? doctorsResult.data : [];
     const leadDoctor = doctors.find((doctor) => doctor.isLeadDoctor) ?? null;
     return (
@@ -36,6 +42,7 @@ export default async function RootPage() {
         leadDoctor={leadDoctor}
         doctors={doctors}
         content={content}
+        homeSections={homeSections}
         homeHref={home}
       />
     );

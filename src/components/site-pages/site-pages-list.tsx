@@ -71,7 +71,6 @@ export function SitePagesList({ pages }: { pages: SitePageSummary[] }) {
             <div className="flex flex-wrap items-center gap-2">
               <p className="font-medium">{page.title}</p>
               {!page.isPublished ? <Badge variant="outline">Draft</Badge> : null}
-              {!page.showInNav ? <Badge variant="secondary">Not in menu</Badge> : null}
             </div>
             <p className="text-muted-foreground text-sm" data-numeric>
               /{page.slug} · {page.blockCount === 1 ? "1 block" : `${page.blockCount} blocks`}

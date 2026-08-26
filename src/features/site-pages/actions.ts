@@ -27,7 +27,6 @@ function readSitePageSettings(formData: FormData) {
   return {
     title: text(formData, "title") ?? "",
     slug: text(formData, "slug") ?? "",
-    showInNav: text(formData, "showInNav") === "on",
     isPublished: text(formData, "isPublished") === "on",
   };
 }
@@ -48,7 +47,6 @@ export async function createSitePageAction(_previous: FormState, formData: FormD
       organization_id: organizationId,
       title: parsed.data.title,
       slug: parsed.data.slug,
-      show_in_nav: parsed.data.showInNav,
       is_published: parsed.data.isPublished,
     })
     .select("id")
@@ -78,7 +76,6 @@ export async function updateSitePageSettingsAction(_previous: FormState, formDat
     .update({
       title: parsed.data.title,
       slug: parsed.data.slug,
-      show_in_nav: parsed.data.showInNav,
       is_published: parsed.data.isPublished,
     })
     .eq("id", pageId);
@@ -164,44 +161,33 @@ export async function deleteBlockAction(_previous: FormState, formData: FormData
   return { status: "success" };
 }
 
-/** Swaps this block's position with its neighbor in the given direction — the whole reordering UI, no drag-and-drop needed. */
-export async function moveBlockAction(_previous: FormState, formData: FormData): Promise<FormState> {
+/** A drag settles as a full new order in one page — a plain position rewrite (no reparenting), same shape as home sections' reorder. */
+export async function reorderBlocksAction(_previous: FormState, formData: FormData): Promise<FormState> {
   await requireRole("admin", "super_admin");
 
   const pageId = text(formData, "pageId");
-  const blockId = text(formData, "blockId");
-  const direction = text(formData, "direction");
-  if (!pageId || !blockId || (direction !== "up" && direction !== "down")) {
-    return { status: "error", message: "We could not tell what to move." };
+  const raw = text(formData, "order");
+  if (!pageId || !raw) return { status: "error", message: "We could not tell the new order." };
+
+  let orderedIds: unknown;
+  try {
+    orderedIds = JSON.parse(raw);
+  } catch {
+    return { status: "error", message: "We could not read the new order. Please try again." };
+  }
+
+  if (!Array.isArray(orderedIds) || !orderedIds.every((id) => typeof id === "string")) {
+    return { status: "error", message: "We could not read the new order. Please try again." };
   }
 
   const supabase = await createClient();
-  const { data: blocks, error: listError } = await supabase
-    .from("site_page_blocks")
-    .select("id, position")
-    .eq("page_id", pageId)
-    .order("position");
+  const results = await Promise.all(
+    orderedIds.map((id, position) => supabase.from("site_page_blocks").update({ position }).eq("id", id).eq("page_id", pageId)),
+  );
 
-  if (listError || !blocks) {
-    return failure("site-pages", listError, "We could not reorder blocks just now. Please try again.");
-  }
-
-  const index = blocks.findIndex((block) => block.id === blockId);
-  const swapWith = direction === "up" ? index - 1 : index + 1;
-  if (index === -1 || swapWith < 0 || swapWith >= blocks.length) {
-    return { status: "success" };
-  }
-
-  const a = blocks[index];
-  const b = blocks[swapWith];
-
-  const [{ error: errorA }, { error: errorB }] = await Promise.all([
-    supabase.from("site_page_blocks").update({ position: b.position }).eq("id", a.id),
-    supabase.from("site_page_blocks").update({ position: a.position }).eq("id", b.id),
-  ]);
-
-  if (errorA || errorB) {
-    return failure("site-pages", errorA ?? errorB, "We could not reorder blocks just now. Please try again.");
+  const firstError = results.find((result) => result.error)?.error;
+  if (firstError) {
+    return failure("site-pages", firstError, "We could not save that order just now. Please try again.");
   }
 
   revalidatePath(`/admin/website/pages/${pageId}`);

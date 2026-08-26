@@ -38,7 +38,6 @@ export const slugSchema = z
 export const sitePageSettingsSchema = z.object({
   title: fullNameSchema,
   slug: slugSchema,
-  showInNav: z.boolean(),
   isPublished: z.boolean(),
 });
 

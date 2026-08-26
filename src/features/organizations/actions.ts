@@ -270,3 +270,24 @@ export async function updateLogoImageAction(_previous: FormState, formData: Form
   }
   return { status: "success", message: "Logo updated." };
 }
+
+/** Whether the footer shows the practice logo at all — the "TV" badge fallback still applies when there's no logo uploaded. */
+export async function updateFooterShowLogoAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const showLogo = text(formData, "footerShowLogo") === "on";
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("organizations").update({ footer_show_logo: showLogo }).eq("id", organizationId);
+
+  if (error) {
+    return failure("organizations", error, "We could not save that just now. Please try again.");
+  }
+
+  for (const path of ["/", "/about", "/services", "/contact", "/doctors"]) {
+    revalidatePath(path);
+  }
+  return { status: "success", message: showLogo ? "Footer logo shown." : "Footer logo hidden." };
+}

@@ -63,14 +63,12 @@ export function SitePageForm({
       />
 
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="showInNav" defaultChecked={page?.showInNav ?? true} className="accent-primary size-4" />
-        Show in the site navigation menu
-      </label>
-
-      <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="isPublished" defaultChecked={page?.isPublished ?? true} className="accent-primary size-4" />
         Published (visible to visitors)
       </label>
+      <p className="text-muted-foreground -mt-2 text-sm">
+        To add this page to the site menu, use Website → Navigation once it&rsquo;s published.
+      </p>
 
       <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
     </form>

@@ -1,15 +1,5 @@
 import Link from "next/link";
-import {
-  Bell,
-  CalendarDays,
-  FileText,
-  Home,
-  PawPrint,
-  Receipt,
-  ShieldCheck,
-  Stethoscope,
-  Syringe,
-} from "lucide-react";
+import { CalendarDays, Stethoscope } from "lucide-react";
 
 import { HeroCarousel } from "@/components/marketing/hero-carousel";
 import { PublicFooter } from "@/components/marketing/public-footer";
@@ -18,74 +8,27 @@ import { TeamGallery } from "@/components/marketing/team-gallery";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicDoctor } from "@/features/doctors/queries";
+import type { HomeSectionItemsBySection } from "@/features/home-sections/queries";
 import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
 import type { PublicOrganizationInfo } from "@/features/organizations/queries";
 import { siteContentValue } from "@/features/site-content/fields";
+import { iconByKey } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-
-const SERVICES = [
-  {
-    icon: Stethoscope,
-    title: "Clinic visits",
-    description: "Book a consultation at the practice with the doctor of your choice.",
-  },
-  {
-    icon: Home,
-    title: "Home visits",
-    description: "Prefer your pet stay comfortable at home? We come to you.",
-  },
-  {
-    icon: Syringe,
-    title: "Vaccinations & deworming",
-    description: "Every dose recorded, with the next one scheduled automatically.",
-  },
-  {
-    icon: FileText,
-    title: "Digital prescriptions",
-    description: "Clear, dosed prescriptions you can find again whenever you need them.",
-  },
-];
-
-const WHY = [
-  {
-    icon: PawPrint,
-    title: "One record, always up to date",
-    description: "Every visit, vaccination and prescription for your pet lives in one place, not a stack of paper.",
-  },
-  {
-    icon: Bell,
-    title: "Reminders that keep up",
-    description: "Vaccination and deworming due dates are tracked for you, and a reminder goes out before they're due.",
-  },
-  {
-    icon: Receipt,
-    title: "Transparent billing",
-    description: "Itemized invoices with clear totals, and a record of every payment against them.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Built for your privacy",
-    description: "Role-based access means your pet's records are visible only to you and your care team.",
-  },
-];
-
-const STEPS = [
-  { step: "1", title: "Create an account", description: "Sign up and add your pet's basic details." },
-  { step: "2", title: "Book an appointment", description: "Choose a doctor, a time, and clinic or home visit." },
-  { step: "3", title: "Get the full picture", description: "SOAP notes, prescriptions and invoices, all in your account afterward." },
-];
 
 export function FrontPage({
   organization,
   leadDoctor,
   doctors,
   content,
+  homeSections,
   homeHref = null,
 }: {
   organization: PublicOrganizationInfo | null;
   leadDoctor: PublicDoctor | null;
   doctors: PublicDoctor[];
   content: Record<string, string>;
+  /** "What we offer" / "Why pet owners choose" / "How it works" — admin-editable via /admin/website/home-sections. */
+  homeSections: HomeSectionItemsBySection;
   /**
    * Set when the visitor is already signed in. The header keeps its own
    * single "Go to dashboard" button (PublicHeader); everywhere else on this
@@ -115,7 +58,7 @@ export function FrontPage({
 
   return (
     <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} />
+      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} organizationId={organization?.id ?? null} />
 
       <main className="flex-1">
         {/* Hero */}
@@ -167,24 +110,31 @@ export function FrontPage({
         </section>
 
         {/* Services */}
-        <section className="border-border/60 border-t bg-muted/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-            <h2 className="text-center text-2xl font-semibold tracking-tight">What we offer</h2>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {SERVICES.map(({ icon: Icon, title, description }) => (
-                <Card key={title} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
-                  <CardContent className="grid gap-3">
-                    <span className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-full">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
-                    <p className="font-medium">{title}</p>
-                    <p className="text-muted-foreground text-sm">{description}</p>
-                  </CardContent>
-                </Card>
-              ))}
+        {homeSections.services.length > 0 ? (
+          <section className="border-border/60 border-t bg-muted/40">
+            <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+              <h2 className="text-center text-2xl font-semibold tracking-tight">What we offer</h2>
+              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {homeSections.services.map((item) => {
+                  const Icon = iconByKey(item.icon);
+                  return (
+                    <Card key={item.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
+                      <CardContent className="grid gap-3">
+                        {Icon ? (
+                          <span className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-full">
+                            <Icon className="size-5" aria-hidden />
+                          </span>
+                        ) : null}
+                        <p className="font-medium">{item.title}</p>
+                        <p className="text-muted-foreground text-sm">{item.description}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {/* Meet our lead doctor — only renders once an admin has marked one */}
         {leadDoctor ? (
@@ -219,40 +169,49 @@ export function FrontPage({
         <TeamGallery doctors={doctors} />
 
         {/* Why TV Care */}
-        <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-          <h2 className="text-center text-2xl font-semibold tracking-tight">Why pet owners choose TV Care</h2>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            {WHY.map(({ icon: Icon, title, description }) => (
-              <div key={title} className="flex gap-4">
-                <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-full">
-                  <Icon className="size-5" aria-hidden />
-                </span>
-                <div className="grid gap-1">
-                  <p className="font-medium">{title}</p>
-                  <p className="text-muted-foreground text-sm">{description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        {homeSections.why.length > 0 ? (
+          <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+            <h2 className="text-center text-2xl font-semibold tracking-tight">Why pet owners choose TV Care</h2>
+            <div className="mt-10 grid gap-6 sm:grid-cols-2">
+              {homeSections.why.map((item) => {
+                const Icon = iconByKey(item.icon);
+                return (
+                  <div key={item.id} className="flex gap-4">
+                    {Icon ? (
+                      <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-full">
+                        <Icon className="size-5" aria-hidden />
+                      </span>
+                    ) : null}
+                    <div className="grid gap-1">
+                      <p className="font-medium">{item.title}</p>
+                      <p className="text-muted-foreground text-sm">{item.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         {/* How it works */}
-        <section className="border-border/60 border-t bg-muted/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-            <h2 className="text-center text-2xl font-semibold tracking-tight">How it works</h2>
-            <div className="mt-10 grid gap-6 sm:grid-cols-3">
-              {STEPS.map(({ step, title, description }) => (
-                <div key={step} className="grid gap-2 text-center sm:text-left">
-                  <span className="bg-primary text-primary-foreground mx-auto flex size-9 items-center justify-center rounded-full text-sm font-semibold sm:mx-0">
-                    {step}
-                  </span>
-                  <p className="font-medium">{title}</p>
-                  <p className="text-muted-foreground text-sm">{description}</p>
-                </div>
-              ))}
+        {homeSections.how_it_works.length > 0 ? (
+          <section className="border-border/60 border-t bg-muted/40">
+            <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+              <h2 className="text-center text-2xl font-semibold tracking-tight">How it works</h2>
+              <div className="mt-10 grid gap-6 sm:grid-cols-3">
+                {homeSections.how_it_works.map((item, index) => (
+                  <div key={item.id} className="grid gap-2 text-center sm:text-left">
+                    <span className="bg-primary text-primary-foreground mx-auto flex size-9 items-center justify-center rounded-full text-sm font-semibold sm:mx-0">
+                      {index + 1}
+                    </span>
+                    <p className="font-medium">{item.title}</p>
+                    <p className="text-muted-foreground text-sm">{item.description}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {/* Closing CTA */}
         <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">

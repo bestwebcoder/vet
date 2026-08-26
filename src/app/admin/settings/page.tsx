@@ -44,7 +44,7 @@ export default async function AdminSettingsPage() {
       ) : (
         <>
           <SettingsForm organization={organization.data} />
-          <LogoImageForm logoUrl={organization.data.logoUrl} />
+          <LogoImageForm logoUrl={organization.data.logoUrl} footerShowLogo={organization.data.footerShowLogo} />
           <HeroImageForm heroImages={heroImages.status === "ok" ? heroImages.data : []} />
         </>
       )}

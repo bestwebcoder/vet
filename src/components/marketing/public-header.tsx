@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-import { PUBLIC_NAV_LINKS } from "@/components/marketing/nav-links";
+import { NavDropdown } from "@/components/marketing/nav-dropdown";
 import { PublicMobileNav } from "@/components/marketing/public-mobile-nav";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
+import { getPublicNavTree } from "@/features/nav-menu/queries";
 
 /**
  * Signed-in visitors browsing the public site (someone checking how the
@@ -12,8 +13,19 @@ import { getSessionUser, homeHrefFor } from "@/features/auth/session";
  * link here instead of Sign in / Get started — those would just bounce them
  * to /login while already authenticated.
  */
-export async function PublicHeader({ practiceName, logoUrl = null }: { practiceName: string; logoUrl?: string | null }) {
-  const user = await getSessionUser();
+export async function PublicHeader({
+  practiceName,
+  logoUrl = null,
+  organizationId = null,
+}: {
+  practiceName: string;
+  logoUrl?: string | null;
+  organizationId?: string | null;
+}) {
+  const [user, navItems] = await Promise.all([
+    getSessionUser(),
+    organizationId ? getPublicNavTree(organizationId) : Promise.resolve([]),
+  ]);
   const homeHref = user ? homeHrefFor(user) : null;
 
   return (
@@ -35,11 +47,21 @@ export async function PublicHeader({ practiceName, logoUrl = null }: { practiceN
         </Link>
 
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Main">
-          {PUBLIC_NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="hover:text-foreground text-sm font-medium">
-              {link.label}
-            </Link>
-          ))}
+          {navItems.map((item) =>
+            item.children.length > 0 ? (
+              <NavDropdown key={item.id} item={item} />
+            ) : (
+              <Link
+                key={item.id}
+                href={item.href}
+                target={item.opensNewTab ? "_blank" : undefined}
+                rel={item.opensNewTab ? "noopener noreferrer" : undefined}
+                className="hover:text-foreground text-sm font-medium"
+              >
+                {item.label}
+              </Link>
+            ),
+          )}
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
@@ -62,7 +84,7 @@ export async function PublicHeader({ practiceName, logoUrl = null }: { practiceN
 
         <div className="flex items-center gap-1 lg:hidden">
           <ThemeToggle size="icon-lg" />
-          <PublicMobileNav homeHref={homeHref} />
+          <PublicMobileNav homeHref={homeHref} navItems={navItems} />
         </div>
       </div>
     </header>
