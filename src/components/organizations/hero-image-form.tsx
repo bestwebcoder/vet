@@ -5,8 +5,6 @@ import { useFormStatus } from "react-dom";
 import { Trash2 } from "lucide-react";
 
 import { FormAlert } from "@/components/form/form-alert";
-import { SubmitButton } from "@/components/form/submit-button";
-import { ImageCropField } from "@/components/media/image-crop-field";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,10 +16,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { addHeroImageAction, deleteHeroImageAction } from "@/features/organizations/actions";
+import { deleteHeroImageAction } from "@/features/organizations/actions";
 import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
 import type { OrganizationHeroImage } from "@/features/organizations/queries";
 import { idleState } from "@/lib/forms";
+import { HeroImageMultiUpload } from "@/components/organizations/hero-image-multi-upload";
 
 function DeleteButton() {
   const { pending } = useFormStatus();
@@ -83,19 +82,8 @@ function HeroImageThumb({ image }: { image: OrganizationHeroImage }) {
  * this is the admin's own set.
  */
 export function HeroImageForm({ heroImages }: { heroImages: OrganizationHeroImage[] }) {
-  const [state, formAction] = useActionState(addHeroImageAction, idleState);
-  const fieldErrors = state.status === "error" ? state.fieldErrors : undefined;
   const atLimit = heroImages.length >= MAX_HERO_IMAGES;
-
-  // Resets the crop field once an upload succeeds, so it doesn't keep
-  // showing the just-added image as "pending" — setState during render
-  // (not an effect) per https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes.
-  const [resetKey, setResetKey] = useState(0);
-  const [lastHandledState, setLastHandledState] = useState(state);
-  if (state !== lastHandledState) {
-    setLastHandledState(state);
-    if (state.status === "success") setResetKey((key) => key + 1);
-  }
+  const remainingSlots = MAX_HERO_IMAGES - heroImages.length;
 
   return (
     <Card>
@@ -120,21 +108,7 @@ export function HeroImageForm({ heroImages }: { heroImages: OrganizationHeroImag
             You have reached the limit of {MAX_HERO_IMAGES} hero images. Remove one to add another.
           </p>
         ) : (
-          <form action={formAction} className="grid gap-3">
-            <FormAlert state={state} />
-            <ImageCropField
-              key={resetKey}
-              id="heroImage"
-              name="heroImage"
-              label="Add a slide"
-              hint="Shown in rotation on the public Home page. Crop it to the 4:3 frame the page uses."
-              errors={fieldErrors?.heroImage}
-              aspect={4 / 3}
-              outputWidth={1200}
-              outputHeight={900}
-            />
-            <SubmitButton pendingLabel="Uploading…">Add image</SubmitButton>
-          </form>
+          <HeroImageMultiUpload remainingSlots={remainingSlots} />
         )}
       </CardContent>
     </Card>

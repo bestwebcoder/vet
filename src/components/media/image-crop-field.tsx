@@ -7,19 +7,8 @@ import { ImageUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { ACCEPTED_IMAGE_TYPES, cropImageToBlob, validateImageFile } from "@/components/media/image-crop-utils";
 import { cn } from "@/lib/utils";
-
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-
-/**
- * A sanity cap on the source file the browser has to decode before
- * cropping — not the upload limit. Whatever the person picks (a 20MP phone
- * photo, a scanned image, anything up to this) gets downsized to
- * outputWidth x outputHeight in the browser before it ever reaches the
- * server, so the byte limits each photo feature module enforces are
- * checked against the small cropped output, not the original.
- */
-const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 
 export type ImageCropFieldProps = {
   id?: string;
@@ -108,14 +97,9 @@ export function ImageCropField({
 
     if (!file) return;
 
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setPickError("Choose a JPEG, PNG or WebP image.");
-      event.target.value = "";
-      return;
-    }
-
-    if (file.size > MAX_SOURCE_BYTES) {
-      setPickError("That image is too large to open. Choose a file under 25 MB.");
+    const problem = validateImageFile(file);
+    if (problem) {
+      setPickError(problem);
       event.target.value = "";
       return;
     }
@@ -200,7 +184,7 @@ export function ImageCropField({
           id={inputId}
           name={name}
           type="file"
-          accept={ACCEPTED_TYPES.join(",")}
+          accept={ACCEPTED_IMAGE_TYPES.join(",")}
           onChange={handleFileChange}
           className="sr-only"
           aria-invalid={hasError || Boolean(pickError) || undefined}
@@ -271,38 +255,4 @@ export function ImageCropField({
       </Dialog>
     </div>
   );
-}
-
-function cropImageToBlob(imageSrc: string, area: Area, outputWidth: number, outputHeight: number): Promise<Blob> {
-  return loadImage(imageSrc).then(
-    (image) =>
-      new Promise<Blob>((resolve, reject) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = outputWidth;
-        canvas.height = outputHeight;
-        const ctx = canvas.getContext("2d");
-
-        if (!ctx) {
-          reject(new Error("Canvas is not supported"));
-          return;
-        }
-
-        ctx.drawImage(image, area.x, area.y, area.width, area.height, 0, 0, outputWidth, outputHeight);
-
-        canvas.toBlob(
-          (blob) => (blob ? resolve(blob) : reject(new Error("Could not export the cropped image"))),
-          "image/jpeg",
-          0.9,
-        );
-      }),
-  );
-}
-
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", () => reject(new Error("Could not load the image")));
-    image.src = src;
-  });
 }
