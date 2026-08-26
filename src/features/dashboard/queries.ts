@@ -212,12 +212,28 @@ export type RecentActivity =
 /**
  * Audit trail, scoped by policy to the reader's own organization.
  */
-export async function getRecentActivity(limit = 6): Promise<RecentActivity> {
+/**
+ * The dashboard's activity feed.
+ *
+ * Scoped to the practice explicitly, not left to row level security. The two
+ * are not equivalent here: audit_logs' policy ends in
+ * is_admin_of_user(entity_id), a function Postgres must call for every
+ * candidate row, and without an organization_id predicate the planner has no
+ * index to start from — so "the last 6 entries" became a sequential scan of
+ * the whole audit log, evaluating that function all the way down it. Measured
+ * at 12,324 rows: a seq scan over every one of them, against an index scan
+ * touching 6 with the filter in place. It had started timing out
+ * (`57014: canceling statement due to statement timeout`).
+ *
+ * Audit logs only ever grow, so this would not have recovered on its own.
+ */
+export async function getRecentActivity(organizationId: string, limit = 6): Promise<RecentActivity> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("audit_logs")
     .select("id, action, created_at")
+    .eq("organization_id", organizationId)
     .order("created_at", { ascending: false })
     .limit(limit);
 
