@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
-import { describeHeroImageProblem, readHeroImage, uploadHeroImage } from "@/features/organizations/hero-image";
+import {
+  describeHeroImageProblem,
+  MAX_HERO_IMAGES,
+  readHeroImage,
+  removeHeroImageObject,
+  uploadHeroImage,
+} from "@/features/organizations/hero-image";
 import { describeLogoImageProblem, readLogoImage, uploadLogoImage } from "@/features/organizations/logo-image";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
@@ -116,8 +122,8 @@ export async function updateOrganizationSettingsAction(_previous: FormState, for
   return { status: "success", message: "Settings saved." };
 }
 
-/** The public front page's hero image — the one image an admin controls (see the site-images bucket). */
-export async function updateHeroImageAction(_previous: FormState, formData: FormData): Promise<FormState> {
+/** Adds one slide to the public front page's hero carousel (see the site-images bucket and organization_hero_images). */
+export async function addHeroImageAction(_previous: FormState, formData: FormData): Promise<FormState> {
   const user = await requireRole("admin", "super_admin");
   const organizationId = user.organizationIds[0];
   if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
@@ -132,24 +138,68 @@ export async function updateHeroImageAction(_previous: FormState, formData: Form
     return { status: "error", message: problem, fieldErrors: { heroImage: [problem] } };
   }
 
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("organization_hero_images")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
+
+  if ((count ?? 0) >= MAX_HERO_IMAGES) {
+    return { status: "error", message: `You can have at most ${MAX_HERO_IMAGES} hero images. Remove one first.` };
+  }
+
   const uploaded = await uploadHeroImage(organizationId, file);
   if (!uploaded.ok) {
     return { status: "error", message: "We could not upload that image. Please try again." };
   }
 
-  const supabase = await createClient();
   const { error } = await supabase
-    .from("organizations")
-    .update({ hero_image_path: uploaded.path })
-    .eq("id", organizationId);
+    .from("organization_hero_images")
+    .insert({ organization_id: organizationId, image_path: uploaded.path, position: count ?? 0 });
 
   if (error) {
-    return failure("organizations", error, "We could not save the hero image just now. Please try again.");
+    return failure("organizations", error, "We could not save that image just now. Please try again.");
   }
 
   revalidatePath("/admin/settings");
   revalidatePath("/");
-  return { status: "success", message: "Hero image updated." };
+  return { status: "success", message: "Hero image added." };
+}
+
+/** Removes one slide from the front page's hero carousel. */
+export async function deleteHeroImageAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const heroImageId = text(formData, "heroImageId");
+  if (!heroImageId) return { status: "error", message: "We could not tell which image to remove." };
+
+  const supabase = await createClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("organization_hero_images")
+    .select("image_path")
+    .eq("id", heroImageId)
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    return failure("organizations", fetchError, "We could not find that image.");
+  }
+
+  const { error } = await supabase.from("organization_hero_images").delete().eq("id", heroImageId);
+
+  if (error) {
+    return failure("organizations", error, "We could not remove that image just now. Please try again.");
+  }
+
+  await removeHeroImageObject(existing.image_path);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/");
+  return { status: "success", message: "Hero image removed." };
 }
 
 /** The practice logo shown in the site header on every public page — see the site-images bucket. */

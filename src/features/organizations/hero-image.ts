@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 
+export { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
+
 /**
- * The front page's hero image, admin-uploaded. Same shape as
- * src/features/doctors/signature.ts — stored at a path derived from the
- * organization id and overwritten in place — but in the site-images
- * bucket, the one PUBLIC bucket in this schema (see
- * 20260831000100_public_site.sql for why).
+ * The front page hero carousel's slides — an ordered gallery an admin
+ * builds up, one upload at a time (see organization_hero_images,
+ * 20260911000100_hero_gallery.sql). Same site-images bucket as the logo,
+ * but a per-image path instead of one fixed, overwritten filename.
  */
 
 export const HERO_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -13,7 +14,7 @@ export const MAX_HERO_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function heroImagePath(organizationId: string, contentType: string) {
   const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
-  return `${organizationId}/hero.${extension}`;
+  return `${organizationId}/hero/${crypto.randomUUID()}.${extension}`;
 }
 
 export function readHeroImage(formData: FormData): File | null {
@@ -42,9 +43,7 @@ export async function uploadHeroImage(
   const supabase = await createClient();
   const path = heroImagePath(organizationId, file.type);
 
-  const { error } = await supabase.storage
-    .from("site-images")
-    .upload(path, file, { contentType: file.type, upsert: true });
+  const { error } = await supabase.storage.from("site-images").upload(path, file, { contentType: file.type });
 
   if (error) {
     console.error("[organizations] hero image upload failed", error);
@@ -52,4 +51,14 @@ export async function uploadHeroImage(
   }
 
   return { ok: true, path };
+}
+
+/** Best-effort — the DB row is the source of truth, so a stray object left behind here is not a correctness problem. */
+export async function removeHeroImageObject(path: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.storage.from("site-images").remove([path]);
+
+  if (error) {
+    console.error("[organizations] hero image removal failed", error);
+  }
 }

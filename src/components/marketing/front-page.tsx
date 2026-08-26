@@ -18,6 +18,7 @@ import { TeamGallery } from "@/components/marketing/team-gallery";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { PublicDoctor } from "@/features/doctors/queries";
+import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
 import type { PublicOrganizationInfo } from "@/features/organizations/queries";
 import { siteContentValue } from "@/features/site-content/fields";
 import { cn } from "@/lib/utils";
@@ -88,19 +89,19 @@ export function FrontPage({
   const practiceName = organization?.name ?? "The Traveling Vet";
   const text = (key: string) => siteContentValue(content, key, practiceName);
 
-  // Real, already-public photos only — the organization's own hero image
-  // plus a handful of doctors with an admin-uploaded photo. Never a stock or
-  // placeholder image standing in for a real person or place. Capped: a
-  // practice with 30 doctors should not preload 30 full-size photos into a
-  // hero slideshow nobody is going to sit through.
-  const MAX_HERO_IMAGES = 5;
-  const heroImages = [
-    ...(organization?.heroImageUrl ? [{ src: organization.heroImageUrl, alt: "" }] : []),
-    ...doctors
-      .filter((doctor) => doctor.photoUrl)
-      .slice(0, MAX_HERO_IMAGES)
-      .map((doctor) => ({ src: doctor.photoUrl!, alt: "" })),
-  ].slice(0, MAX_HERO_IMAGES);
+  // The admin's own hero gallery (Settings) drives the slideshow. Until one
+  // is uploaded, fall back to a handful of doctors with an admin-uploaded
+  // photo, so a fresh install still looks intentional. Never a stock or
+  // placeholder image standing in for a real person or place. Capped either
+  // way: a practice with 30 doctors should not preload 30 full-size photos
+  // into a hero slideshow nobody is going to sit through.
+  const heroImages =
+    organization && organization.heroImages.length > 0
+      ? organization.heroImages
+      : doctors
+          .filter((doctor) => doctor.photoUrl)
+          .slice(0, MAX_HERO_IMAGES)
+          .map((doctor) => ({ src: doctor.photoUrl!, alt: "" }));
 
   return (
     <div className="flex min-h-svh flex-col">

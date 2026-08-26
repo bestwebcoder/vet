@@ -11,7 +11,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 /**
  * A public-bucket object's URL is a deterministic string, not a signed
  * grant — no client/auth needed to build it. Same shape as
- * heroImagePublicUrl in src/features/organizations/queries.ts, including the
+ * siteImagePublicUrl in src/features/organizations/queries.ts, including the
  * `v` cache-buster: the path is overwritten in place on re-upload, so
  * without it browsers and the storage CDN keep serving the old photo.
  */

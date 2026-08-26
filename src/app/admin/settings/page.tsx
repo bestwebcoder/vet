@@ -6,7 +6,7 @@ import { SettingsForm } from "@/components/organizations/settings-form";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
-import { getOwnOrganization } from "@/features/organizations/queries";
+import { getOrganizationHeroImages, getOwnOrganization } from "@/features/organizations/queries";
 
 export const metadata: Metadata = { title: "Settings · TV Care" };
 
@@ -23,7 +23,10 @@ export default async function AdminSettingsPage() {
     );
   }
 
-  const organization = await getOwnOrganization(organizationId);
+  const [organization, heroImages] = await Promise.all([
+    getOwnOrganization(organizationId),
+    getOrganizationHeroImages(organizationId),
+  ]);
 
   return (
     <div className="grid gap-6">
@@ -42,7 +45,7 @@ export default async function AdminSettingsPage() {
         <>
           <SettingsForm organization={organization.data} />
           <LogoImageForm logoUrl={organization.data.logoUrl} />
-          <HeroImageForm heroImageUrl={organization.data.heroImageUrl} />
+          <HeroImageForm heroImages={heroImages.status === "ok" ? heroImages.data : []} />
         </>
       )}
     </div>

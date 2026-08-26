@@ -1,3 +1,4 @@
+import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image";
 import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -9,18 +10,15 @@ import { createServiceClient } from "@/lib/supabase/service";
  * grant — no client/auth needed to build it, unlike every other storage
  * path in this app (which all resolve through a signed URL instead).
  *
- * The path itself never changes across re-uploads (upsert overwrites it in
- * place), so a `v` cache-buster tied to `updated_at` is required — without
- * it, browsers and the storage CDN keep serving the previous image after an
- * admin uploads a new one.
+ * `updatedAt`, when given, adds a cache-busting `v` param — needed for a
+ * fixed path that gets overwritten in place (the logo), so browsers and the
+ * storage CDN don't keep serving the old image. Hero gallery images each
+ * get their own never-reused path (organizations/hero-image.ts), so they
+ * don't need one.
  */
-function heroImagePublicUrl(path: string, updatedAt: string): string {
-  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}?v=${Date.parse(updatedAt)}`;
-}
-
-/** Same bucket and cache-buster shape as heroImagePublicUrl, a different stored path. */
-function logoImagePublicUrl(path: string, updatedAt: string): string {
-  return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}?v=${Date.parse(updatedAt)}`;
+function siteImagePublicUrl(path: string, updatedAt?: string): string {
+  const base = `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/site-images/${path}`;
+  return updatedAt ? `${base}?v=${Date.parse(updatedAt)}` : base;
 }
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
@@ -40,15 +38,13 @@ export type Organization = {
   paymentInstructions: string | null;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
-  heroImagePath: string | null;
-  heroImageUrl: string | null;
   logoPath: string | null;
   logoUrl: string | null;
 };
 
 const ORGANIZATION_COLUMNS = `
   id, name, legal_name, timezone, email, phone, whatsapp_number, address, city, country, is_active,
-  payment_instructions, quiet_hours_start, quiet_hours_end, hero_image_path, logo_path, updated_at
+  payment_instructions, quiet_hours_start, quiet_hours_end, logo_path, updated_at
 `;
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -68,10 +64,8 @@ function toOrganization(row: any): Organization {
     paymentInstructions: row.payment_instructions,
     quietHoursStart: row.quiet_hours_start,
     quietHoursEnd: row.quiet_hours_end,
-    heroImagePath: row.hero_image_path,
-    heroImageUrl: row.hero_image_path ? heroImagePublicUrl(row.hero_image_path, row.updated_at) : null,
     logoPath: row.logo_path,
-    logoUrl: row.logo_path ? logoImagePublicUrl(row.logo_path, row.updated_at) : null,
+    logoUrl: row.logo_path ? siteImagePublicUrl(row.logo_path, row.updated_at) : null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -93,6 +87,29 @@ export async function getOwnOrganization(organizationId: string): Promise<Result
   return { status: "ok", data: data ? toOrganization(data) : null };
 }
 
+export type OrganizationHeroImage = { id: string; url: string };
+
+/** The front page hero carousel's slides, in upload order — the gallery an admin builds up from Settings. */
+export async function getOrganizationHeroImages(organizationId: string): Promise<Result<OrganizationHeroImage[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("organization_hero_images")
+    .select("id, image_path")
+    .eq("organization_id", organizationId)
+    .order("position", { ascending: true });
+
+  if (error) {
+    console.error("[organizations] hero images list failed", error);
+    return { status: "error" };
+  }
+
+  return {
+    status: "ok",
+    data: (data ?? []).map((row) => ({ id: row.id, url: siteImagePublicUrl(row.image_path) })),
+  };
+}
+
 export type PublicOrganizationInfo = {
   id: string;
   name: string;
@@ -101,7 +118,7 @@ export type PublicOrganizationInfo = {
   whatsappNumber: string | null;
   address: string | null;
   city: string | null;
-  heroImageUrl: string | null;
+  heroImages: { src: string; alt: string }[];
   logoUrl: string | null;
 };
 
@@ -118,7 +135,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, phone, email, whatsapp_number, address, city, hero_image_path, logo_path, updated_at")
+    .select("id, name, phone, email, whatsapp_number, address, city, logo_path, updated_at")
     .eq("is_active", true)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -132,6 +149,17 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
 
   if (!data) return null;
 
+  const { data: heroRows, error: heroError } = await supabase
+    .from("organization_hero_images")
+    .select("image_path")
+    .eq("organization_id", data.id)
+    .order("position", { ascending: true })
+    .limit(MAX_HERO_IMAGES);
+
+  if (heroError) {
+    console.error("[organizations] public hero images failed", heroError);
+  }
+
   return {
     id: data.id,
     name: data.name,
@@ -140,7 +168,7 @@ export async function getPublicOrganizationInfo(): Promise<PublicOrganizationInf
     whatsappNumber: data.whatsapp_number,
     address: data.address,
     city: data.city,
-    heroImageUrl: data.hero_image_path ? heroImagePublicUrl(data.hero_image_path, data.updated_at) : null,
-    logoUrl: data.logo_path ? logoImagePublicUrl(data.logo_path, data.updated_at) : null,
+    heroImages: (heroRows ?? []).map((row) => ({ src: siteImagePublicUrl(row.image_path), alt: "" })),
+    logoUrl: data.logo_path ? siteImagePublicUrl(data.logo_path, data.updated_at) : null,
   };
 }
