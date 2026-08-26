@@ -182,6 +182,7 @@ export type PublicDoctor = {
   bio: string | null;
   photoUrl: string | null;
   isLeadDoctor: boolean;
+  branchName: string | null;
 };
 
 /**
@@ -197,7 +198,9 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
 
   const { data, error } = await supabase
     .from("doctors")
-    .select("id, specialization, qualifications, bio, photo_path, updated_at, is_lead_doctor, user:user_id (full_name)")
+    .select(
+      "id, specialization, qualifications, bio, photo_path, updated_at, is_lead_doctor, user:user_id (full_name), branch:primary_branch_id (name)",
+    )
     .is("deleted_at", null)
     .order("id");
 
@@ -210,6 +213,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
     status: "ok",
     data: (data ?? []).map((row) => {
       const user = Array.isArray(row.user) ? row.user[0] : row.user;
+      const branch = Array.isArray(row.branch) ? row.branch[0] : row.branch;
       return {
         id: row.id,
         fullName: user?.full_name ?? "Unknown doctor",
@@ -218,6 +222,7 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
         bio: row.bio,
         photoUrl: row.photo_path ? doctorPhotoPublicUrl(row.photo_path, row.updated_at) : null,
         isLeadDoctor: row.is_lead_doctor,
+        branchName: branch?.name ?? null,
       };
     }),
   };

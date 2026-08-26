@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Stethoscope } from "lucide-react";
 
+import { DoctorCard } from "@/components/marketing/doctor-card";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { getPublicDoctors } from "@/features/doctors/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 
@@ -46,29 +45,7 @@ export default async function DoctorsPage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {doctors.map((doctor) => (
-                  <Card key={doctor.id}>
-                    <CardContent className="grid gap-2">
-                      {doctor.photoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- an arbitrary-dimension public image; no build-time optimization to gain here.
-                        <img src={doctor.photoUrl} alt="" className="size-16 rounded-full object-cover" />
-                      ) : (
-                        <span className="bg-secondary text-secondary-foreground flex size-16 items-center justify-center rounded-full">
-                          <Stethoscope className="size-6" aria-hidden />
-                        </span>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{doctor.fullName}</p>
-                        {doctor.isLeadDoctor ? <Badge>Lead doctor</Badge> : null}
-                      </div>
-                      {doctor.specialization ? (
-                        <p className="text-muted-foreground text-sm">{doctor.specialization}</p>
-                      ) : null}
-                      {doctor.qualifications ? (
-                        <p className="text-muted-foreground text-sm">{doctor.qualifications}</p>
-                      ) : null}
-                      {doctor.bio ? <p className="text-muted-foreground mt-1 text-sm">{doctor.bio}</p> : null}
-                    </CardContent>
-                  </Card>
+                  <DoctorCard key={doctor.id} doctor={doctor} />
                 ))}
               </div>
             )}
