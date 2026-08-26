@@ -86,7 +86,14 @@ export function FrontPage({
   leadDoctor: PublicDoctor | null;
   doctors: PublicDoctor[];
   content: Record<string, string>;
-  /** Set when the visitor is already signed in — swaps the sign-up/sign-in CTAs for a link back to their own dashboard. */
+  /**
+   * Set when the visitor is already signed in. The header keeps its own
+   * single "Go to dashboard" button (PublicHeader); everywhere else on this
+   * page the Create an account / Sign in buttons keep their normal labels,
+   * but point here instead of /register or /login — a signed-in visitor
+   * clicking either just lands on their own area rather than a sign-up or
+   * sign-in form that no longer applies to them.
+   */
   homeHref?: string | null;
 }) {
   const practiceName = organization?.name ?? "The Traveling Vet";
@@ -139,20 +146,18 @@ export function FrontPage({
                     heroImages.length > 0 ? "justify-center lg:justify-start" : "justify-center",
                   )}
                 >
-                  {homeHref ? (
-                    <Link href={homeHref} className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
-                      Go to dashboard
-                    </Link>
-                  ) : (
-                    <>
-                      <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
-                        Create an account
-                      </Link>
-                      <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}>
-                        Sign in
-                      </Link>
-                    </>
-                  )}
+                  <Link
+                    href={homeHref ?? "/register"}
+                    className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}
+                  >
+                    Create an account
+                  </Link>
+                  <Link
+                    href={homeHref ?? "/login"}
+                    className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}
+                  >
+                    Sign in
+                  </Link>
                 </div>
               </div>
 
@@ -261,7 +266,7 @@ export function FrontPage({
               href={homeHref ?? "/register"}
               className={cn(buttonVariants({ size: "touch" }), "mx-auto w-full sm:w-auto")}
             >
-              {homeHref ? "Go to dashboard" : "Create an account"}
+              Create an account
             </Link>
           </div>
         </section>
