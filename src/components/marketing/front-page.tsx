@@ -80,11 +80,14 @@ export function FrontPage({
   leadDoctor,
   doctors,
   content,
+  homeHref = null,
 }: {
   organization: PublicOrganizationInfo | null;
   leadDoctor: PublicDoctor | null;
   doctors: PublicDoctor[];
   content: Record<string, string>;
+  /** Set when the visitor is already signed in — swaps the sign-up/sign-in CTAs for a link back to their own dashboard. */
+  homeHref?: string | null;
 }) {
   const practiceName = organization?.name ?? "The Traveling Vet";
   const text = (key: string) => siteContentValue(content, key, practiceName);
@@ -136,12 +139,20 @@ export function FrontPage({
                     heroImages.length > 0 ? "justify-center lg:justify-start" : "justify-center",
                   )}
                 >
-                  <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
-                    Create an account
-                  </Link>
-                  <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}>
-                    Sign in
-                  </Link>
+                  {homeHref ? (
+                    <Link href={homeHref} className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
+                      Go to dashboard
+                    </Link>
+                  ) : (
+                    <>
+                      <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "w-full sm:w-auto")}>
+                        Create an account
+                      </Link>
+                      <Link href="/login" className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full sm:w-auto")}>
+                        Sign in
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -246,8 +257,11 @@ export function FrontPage({
             </span>
             <h2 className="text-2xl font-semibold tracking-tight">{text("home.cta_title")}</h2>
             <p className="text-muted-foreground">{text("home.cta_subtitle")}</p>
-            <Link href="/register" className={cn(buttonVariants({ size: "touch" }), "mx-auto w-full sm:w-auto")}>
-              Create an account
+            <Link
+              href={homeHref ?? "/register"}
+              className={cn(buttonVariants({ size: "touch" }), "mx-auto w-full sm:w-auto")}
+            >
+              {homeHref ? "Go to dashboard" : "Create an account"}
             </Link>
           </div>
         </section>

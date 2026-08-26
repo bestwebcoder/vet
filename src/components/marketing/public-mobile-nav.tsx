@@ -9,7 +9,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-export function PublicMobileNav() {
+export function PublicMobileNav({ homeHref = null }: { homeHref?: string | null }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -45,12 +45,20 @@ export function PublicMobileNav() {
             </Link>
           ))}
           <div className="mt-3 grid gap-2 border-t pt-3">
-            <Link href="/login" onClick={() => setOpen(false)} className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full")}>
-              Sign in
-            </Link>
-            <Link href="/register" onClick={() => setOpen(false)} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
-              Get started
-            </Link>
+            {homeHref ? (
+              <Link href={homeHref} onClick={() => setOpen(false)} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
+                Go to dashboard
+              </Link>
+            ) : (
+              <>
+                <Link href="/login" onClick={() => setOpen(false)} className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full")}>
+                  Sign in
+                </Link>
+                <Link href="/register" onClick={() => setOpen(false)} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
+                  Get started
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       </SheetContent>

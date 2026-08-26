@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { FrontPage } from "@/components/marketing/front-page";
 import { EmptyState } from "@/components/states/empty-state";
@@ -14,25 +13,32 @@ import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 export const metadata: Metadata = { title: "TV Care" };
 
 /**
- * Signed in: sends each person to their own area (someone holding several
- * roles lands on the most privileged one; the others stay reachable by
- * URL). Signed out: the public front page, not a login redirect.
+ * The public front page — for everyone, signed in or not. Signing in only
+ * changes the sign-up/sign-in CTAs into a link back to your own dashboard
+ * (see PublicHeader and FrontPage's homeHref prop); it never redirects you
+ * away, so an admin, doctor or client can still browse the site they're
+ * running while logged in. loginAction/registerAction send you straight to
+ * your dashboard on the way in, so this only matters when you navigate
+ * *back* to "/" afterward.
  */
 export default async function RootPage() {
   const user = await getSessionUser();
+  const home = user ? homeHrefFor(user) : null;
 
-  if (!user) {
+  if (!user || home) {
     const [organization, doctorsResult] = await Promise.all([getPublicOrganizationInfo(), getPublicDoctors()]);
     const content = organization ? await getPublicSiteContent(organization.id) : {};
     const doctors = doctorsResult.status === "ok" ? doctorsResult.data : [];
     const leadDoctor = doctors.find((doctor) => doctor.isLeadDoctor) ?? null;
-    return <FrontPage organization={organization} leadDoctor={leadDoctor} doctors={doctors} content={content} />;
-  }
-
-  const home = homeHrefFor(user);
-
-  if (home) {
-    redirect(home);
+    return (
+      <FrontPage
+        organization={organization}
+        leadDoctor={leadDoctor}
+        doctors={doctors}
+        content={content}
+        homeHref={home}
+      />
+    );
   }
 
   // A real state, not an error: an administrator can create an account before

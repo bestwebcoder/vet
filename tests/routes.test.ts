@@ -58,17 +58,20 @@ describe("signed out", () => {
   });
 });
 
-describe("each role lands on its own area", () => {
+describe("each role can still browse the public front page while signed in", () => {
+  // / is the public front page for everyone — a signed-in visitor gets a
+  // "Go to dashboard" link back to their own area instead of being bounced
+  // away from the page they navigated to.
   it.each([
     ["client", "/client"],
     ["doctor", "/doctor"],
     ["admin", "/admin"],
-  ])("routes a %s to %s", async (role, expected) => {
+  ])("shows a %s a link to %s instead of redirecting", async (role, expected) => {
     const session = { client: clientSession, doctor: doctorSession, admin: adminSession }[role]!;
     const response = await session.get("/");
 
-    expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toContain(expected);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(`href="${expected}"`);
   });
 });
 

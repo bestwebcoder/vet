@@ -4,8 +4,18 @@ import { PUBLIC_NAV_LINKS } from "@/components/marketing/nav-links";
 import { PublicMobileNav } from "@/components/marketing/public-mobile-nav";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
+import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 
-export function PublicHeader({ practiceName, logoUrl = null }: { practiceName: string; logoUrl?: string | null }) {
+/**
+ * Signed-in visitors browsing the public site (someone checking how the
+ * home page looks, following a link from outside the app) get a Dashboard
+ * link here instead of Sign in / Get started — those would just bounce them
+ * to /login while already authenticated.
+ */
+export async function PublicHeader({ practiceName, logoUrl = null }: { practiceName: string; logoUrl?: string | null }) {
+  const user = await getSessionUser();
+  const homeHref = user ? homeHrefFor(user) : null;
+
   return (
     <header className="border-border/60 bg-background/90 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-20 border-b backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
@@ -34,17 +44,25 @@ export function PublicHeader({ practiceName, logoUrl = null }: { practiceName: s
 
         <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle size="icon-lg" />
-          <Link href="/login" className={buttonVariants({ variant: "ghost", size: "touch" })}>
-            Sign in
-          </Link>
-          <Link href="/register" className={buttonVariants({ size: "touch" })}>
-            Get started
-          </Link>
+          {homeHref ? (
+            <Link href={homeHref} className={buttonVariants({ size: "touch" })}>
+              Go to dashboard
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className={buttonVariants({ variant: "ghost", size: "touch" })}>
+                Sign in
+              </Link>
+              <Link href="/register" className={buttonVariants({ size: "touch" })}>
+                Get started
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1 lg:hidden">
           <ThemeToggle size="icon-lg" />
-          <PublicMobileNav />
+          <PublicMobileNav homeHref={homeHref} />
         </div>
       </div>
     </header>

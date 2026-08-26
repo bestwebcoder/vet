@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -32,8 +33,14 @@ export type SessionUser = {
   organizationIds: string[];
 };
 
-/** Returns the signed-in user, or null. Does not redirect. */
-export async function getSessionUser(): Promise<SessionUser | null> {
+/**
+ * Returns the signed-in user, or null. Does not redirect.
+ *
+ * Wrapped in React's cache() so the public layout (which now reads the
+ * session to decide the header's CTA) and the page it wraps don't each pay
+ * for a separate round trip within the same render.
+ */
+export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
 
@@ -70,7 +77,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     roles: [...new Set(roles)],
     organizationIds: [...new Set((grants ?? []).map((grant) => grant.organization_id))],
   };
-}
+});
 
 /** Requires a signed-in user; sends them to sign in otherwise. */
 export async function requireUser(): Promise<SessionUser> {

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 import { failure, invalid, type FormState } from "@/lib/forms";
 import {
   forgotPasswordSchema,
@@ -11,6 +12,17 @@ import {
   registerSchema,
   resetPasswordSchema,
 } from "@/lib/validation/auth";
+
+/**
+ * "/" is the public front page for everyone now, signed in or not (see
+ * app/page.tsx) — it no longer bounces a signed-in visitor to their
+ * dashboard. So the moment that used to matter, landing on your own area
+ * right after signing in, has to be handled here instead.
+ */
+async function redirectHome(): Promise<never> {
+  const user = await getSessionUser();
+  redirect((user && homeHrefFor(user)) || "/");
+}
 
 // Re-exported so screens can keep importing the form state alongside the
 // actions they use it with.
@@ -82,7 +94,7 @@ export async function registerAction(
     };
   }
 
-  redirect("/");
+  return redirectHome();
 }
 
 export async function loginAction(_previous: FormState, formData: FormData): Promise<FormState> {
@@ -113,7 +125,7 @@ export async function loginAction(_previous: FormState, formData: FormData): Pro
     return { status: "error", message: "Email or password is incorrect." };
   }
 
-  redirect("/");
+  return redirectHome();
 }
 
 export async function logoutAction() {
@@ -186,5 +198,5 @@ export async function resetPasswordAction(
     );
   }
 
-  redirect("/");
+  return redirectHome();
 }
