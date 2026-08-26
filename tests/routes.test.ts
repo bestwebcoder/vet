@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { createUserWithRole, runId, Session, signIn } from "./setup/http";
+import { createUserWithRole, runId, Session, signIn, type TestRole } from "./setup/http";
 
 /**
  * Checkpoint 6 verification — role-based route protection.
@@ -11,7 +11,7 @@ import { createUserWithRole, runId, Session, signIn } from "./setup/http";
 
 const RUN = runId();
 
-async function createUser(label: string, role: "client" | "doctor" | "admin") {
+async function createUser(label: string, role: TestRole) {
   const { email } = await createUserWithRole(`route-${label}-${RUN}`, role);
   return email;
 }
@@ -20,23 +20,26 @@ let clientSession: Session;
 let doctorSession: Session;
 let adminSession: Session;
 let rolelessSession: Session;
+let receptionSession: Session;
 
 beforeAll(async () => {
-  const [clientEmail, doctorEmail, adminEmail] = await Promise.all([
+  const [clientEmail, doctorEmail, adminEmail, receptionEmail] = await Promise.all([
     createUser("client", "client"),
     createUser("doctor", "doctor"),
     createUser("admin", "admin"),
+    createUser("reception", "receptionist"),
   ]);
 
   // Created without any role, which is what an administratively created
   // account looks like before access is granted.
   const { email: rolelessEmail } = await createUserWithRole(`route-norole-${RUN}`, null);
 
-  [clientSession, doctorSession, adminSession, rolelessSession] = await Promise.all([
+  [clientSession, doctorSession, adminSession, rolelessSession, receptionSession] = await Promise.all([
     signIn(clientEmail),
     signIn(doctorEmail),
     signIn(adminEmail),
     signIn(rolelessEmail),
+    signIn(receptionEmail),
   ]);
 }, 120_000);
 
@@ -109,6 +112,36 @@ describe("no role reaches another role's area", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toContain("/no-access");
+  });
+});
+
+/**
+ * The /admin layout admits the narrower clinic-side roles now, so it is no
+ * longer what keeps them out of an administrator's pages — each page guards
+ * itself. These are the pages a receptionist can see the *menu* has no link to;
+ * typing the URL must not be a way around that.
+ */
+describe("administration stays administrators-only", () => {
+  it.each(["/admin/users", "/admin/settings", "/admin/website", "/admin/clients"])(
+    "keeps a receptionist out of %s",
+    async (path) => {
+      const response = await receptionSession.get(path);
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toContain("/no-access");
+    },
+  );
+
+  it("still lets a receptionist reach the front desk", async () => {
+    const response = await receptionSession.get("/admin/appointments");
+
+    expect(response.status).toBe(200);
+  });
+
+  it("does not show a receptionist the Users link", async () => {
+    const html = await (await receptionSession.page("/admin")).text();
+
+    expect(html).not.toContain("/admin/users");
   });
 });
 

@@ -14,12 +14,15 @@ export function InviteTeamMemberDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button size="touch" />}>
         <UserPlus aria-hidden />
-        Add team member
+        Add user
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add a team member</DialogTitle>
-          <DialogDescription>They receive an email to set their own password and sign in.</DialogDescription>
+          <DialogTitle>Add a user</DialogTitle>
+          <DialogDescription>
+            They receive an email to set their own password. Their role decides what they can reach once they sign
+            in, and can be changed at any time.
+          </DialogDescription>
         </DialogHeader>
 
         <InviteTeamMemberForm onDone={() => setOpen(false)} />
