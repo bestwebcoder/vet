@@ -58,3 +58,34 @@ export function TableSkeleton({
     </div>
   );
 }
+
+/**
+ * The whole-page placeholder for a route segment's loading.tsx.
+ *
+ * Not yet wired to one. Adding `loading.tsx` under /admin, /doctor or /client
+ * makes that segment stream, which turns a page-level redirect() or
+ * notFound() into HTTP 200 with the redirect delivered in the streamed payload
+ * — a browser still lands in the right place, but an unauthorized request
+ * stops answering 307, which monitoring and tests/routes.test.ts both rely on.
+ * (Layout-level guards keep their 307, so they are unaffected.)
+ *
+ * Wiring this up therefore means moving the per-page requireRole calls into
+ * per-section layouts first. Kept here, ready, so that work does not also have
+ * to design the placeholder.
+ */
+export function PageSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="grid gap-6" role="status" aria-live="polite">
+      <span className="sr-only">Loading</span>
+
+      <div className="grid gap-2">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-4 w-full max-w-md" />
+      </div>
+
+      <div className="bg-card ring-foreground/10 grid gap-4 rounded-xl p-4 ring-1">
+        <TableSkeleton rows={rows} columns={3} />
+      </div>
+    </div>
+  );
+}

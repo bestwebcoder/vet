@@ -21,25 +21,28 @@ let doctorSession: Session;
 let adminSession: Session;
 let rolelessSession: Session;
 let receptionSession: Session;
+let financeSession: Session;
 
 beforeAll(async () => {
-  const [clientEmail, doctorEmail, adminEmail, receptionEmail] = await Promise.all([
+  const [clientEmail, doctorEmail, adminEmail, receptionEmail, financeEmail] = await Promise.all([
     createUser("client", "client"),
     createUser("doctor", "doctor"),
     createUser("admin", "admin"),
     createUser("reception", "receptionist"),
+    createUser("finance", "finance_manager"),
   ]);
 
   // Created without any role, which is what an administratively created
   // account looks like before access is granted.
   const { email: rolelessEmail } = await createUserWithRole(`route-norole-${RUN}`, null);
 
-  [clientSession, doctorSession, adminSession, rolelessSession, receptionSession] = await Promise.all([
+  [clientSession, doctorSession, adminSession, rolelessSession, receptionSession, financeSession] = await Promise.all([
     signIn(clientEmail),
     signIn(doctorEmail),
     signIn(adminEmail),
     signIn(rolelessEmail),
     signIn(receptionEmail),
+    signIn(financeEmail),
   ]);
 }, 120_000);
 
@@ -136,6 +139,19 @@ describe("administration stays administrators-only", () => {
     const response = await receptionSession.get("/admin/appointments");
 
     expect(response.status).toBe(200);
+  });
+
+  it("shows a narrower role only its own dashboard cards, never a fabricated zero", async () => {
+    // A denied read under row level security comes back as an empty set, not
+    // an error, so an ungated dashboard would tell a finance manager there are
+    // "0 registered clients" — a wrong number about records they may not
+    // count, which is worse than not showing the card at all.
+    const html = await (await financeSession.page("/admin")).text();
+
+    expect(html).toContain("Unpaid invoices");
+    expect(html).not.toContain("Registered clients");
+    expect(html).not.toContain("Vaccinations due today");
+    expect(html).not.toContain("New patients");
   });
 
   it("does not show a receptionist the Users link", async () => {
