@@ -11,8 +11,20 @@
  * same way these sections do.
  */
 
+/**
+ * Pages that own card lists, and so may appear in page_section_items.page —
+ * this list matches that column's check constraint.
+ */
 export const PAGE_KEYS = ["home", "about", "services", "contact"] as const;
 export type PageKey = (typeof PAGE_KEYS)[number];
+
+/**
+ * Every page the website editor offers. The footer is here because it has
+ * editable text like the others, but it is not a PageKey: it has no card list,
+ * so no row ever names it, and it is not in the table's constraint.
+ */
+export const EDITOR_PAGE_KEYS = [...PAGE_KEYS, "footer"] as const;
+export type EditorPageKey = (typeof EDITOR_PAGE_KEYS)[number];
 
 export type SectionDefinition = {
   key: string;
@@ -28,7 +40,7 @@ export type SectionDefinition = {
 };
 
 export type PageDefinition = {
-  key: PageKey;
+  key: EditorPageKey;
   /** Heading in the admin editor. */
   label: string;
   /** The public page these sections render on. */
@@ -41,9 +53,9 @@ export type PageDefinition = {
 export const PAGE_SECTIONS: PageDefinition[] = [
   {
     key: "home",
-    label: "Home page sections",
+    label: "Home page",
     href: "/",
-    blurb: "“What we offer”, “Why pet owners choose” and “How it works” — reorder items and edit their text and pictures.",
+    blurb: "The hero, the closing call to action, and the “What we offer”, “Why pet owners choose” and “How it works” card lists.",
     sections: [
       {
         key: "services",
@@ -67,9 +79,9 @@ export const PAGE_SECTIONS: PageDefinition[] = [
   },
   {
     key: "about",
-    label: "About page sections",
+    label: "About page",
     href: "/about",
-    blurb: "The “What we stand for” cards between the introduction and “How we work”.",
+    blurb: "The introduction, “How we work”, and the “What we stand for” cards between them.",
     sections: [
       {
         key: "values",
@@ -81,9 +93,9 @@ export const PAGE_SECTIONS: PageDefinition[] = [
   },
   {
     key: "services",
-    label: "Services page sections",
+    label: "Services page",
     href: "/services",
-    blurb: "Highlight cards shown above the priced service list.",
+    blurb: "The introduction, and the highlight cards above the priced service list.",
     sections: [
       {
         key: "highlights",
@@ -96,9 +108,9 @@ export const PAGE_SECTIONS: PageDefinition[] = [
   },
   {
     key: "contact",
-    label: "Contact page sections",
+    label: "Contact page",
     href: "/contact",
-    blurb: "Extra cards beside the phone, email and address already taken from your practice details.",
+    blurb: "The introduction, and extra cards beside the phone, email and address from your practice details.",
     sections: [
       {
         key: "points",
@@ -108,6 +120,14 @@ export const PAGE_SECTIONS: PageDefinition[] = [
         usesIcon: true,
       },
     ],
+  },
+  {
+    key: "footer",
+    label: "Footer",
+    href: "/",
+    blurb: "The tagline and copyright line at the bottom of every public page.",
+    // Text only — the footer's links are built in Website → Navigation.
+    sections: [],
   },
 ];
 
@@ -121,4 +141,8 @@ export function sectionDefinition(page: string, section: string): SectionDefinit
 
 export function isPageKey(value: string): value is PageKey {
   return PAGE_KEYS.includes(value as PageKey);
+}
+
+export function isEditorPageKey(value: string): value is EditorPageKey {
+  return EDITOR_PAGE_KEYS.includes(value as EditorPageKey);
 }

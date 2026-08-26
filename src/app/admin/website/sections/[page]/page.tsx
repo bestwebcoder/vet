@@ -3,15 +3,19 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 
+import { PageContentForm, type PageContentFieldView } from "@/components/page-sections/page-content-form";
 import { PageSectionEditor } from "@/components/page-sections/page-section-editor";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { requireRole } from "@/features/auth/session";
+import { getOwnOrganization } from "@/features/organizations/queries";
 import { listPageSectionItemsForAdmin } from "@/features/page-sections/queries";
-import { PAGE_SECTIONS, isPageKey, pageDefinition } from "@/lib/page-sections";
+import { siteContentFieldsFor } from "@/features/site-content/fields";
+import { getSiteContentForAdmin } from "@/features/site-content/queries";
+import { PAGE_SECTIONS, isEditorPageKey, isPageKey, pageDefinition } from "@/lib/page-sections";
 
-/** Every fixed page's editor is this one route — one entry per page in the registry. */
+/** Every page's editor is this one route — one entry per page in the registry. */
 export function generateStaticParams() {
   return PAGE_SECTIONS.map((definition) => ({ page: definition.key }));
 }
@@ -22,9 +26,17 @@ export async function generateMetadata({ params }: PageProps<"/admin/website/sec
   return { title: definition ? `${definition.label} · TV Care` : "Not found" };
 }
 
-export default async function AdminPageSectionsPage({ params }: PageProps<"/admin/website/sections/[page]">) {
+/**
+ * One page, one screen: its text and its card lists together.
+ *
+ * These used to be two separate places — "Public website content" held every
+ * page's copy behind its own sub-menu, while the card lists lived here — so
+ * editing one page meant working in two screens that each showed a different
+ * slice of every page.
+ */
+export default async function AdminWebsitePageEditor({ params }: PageProps<"/admin/website/sections/[page]">) {
   const { page } = await params;
-  if (!isPageKey(page)) notFound();
+  if (!isEditorPageKey(page)) notFound();
 
   const definition = pageDefinition(page);
   if (!definition) notFound();
@@ -41,7 +53,28 @@ export default async function AdminPageSectionsPage({ params }: PageProps<"/admi
     );
   }
 
-  const itemsBySection = await listPageSectionItemsForAdmin(organizationId, page);
+  const contentFields = siteContentFieldsFor(page);
+
+  // The footer has no card list, so it never queries a table no row of it
+  // could be in — see EDITOR_PAGE_KEYS.
+  const [organization, siteContent, itemsBySection] = await Promise.all([
+    getOwnOrganization(organizationId),
+    getSiteContentForAdmin(organizationId),
+    isPageKey(page) ? listPageSectionItemsForAdmin(organizationId, page) : Promise.resolve(null),
+  ]);
+
+  const practiceName = organization.status === "ok" ? (organization.data?.name ?? "The Traveling Vet") : "The Traveling Vet";
+
+  // Resolved here rather than in the form: each field's default is a function
+  // of the practice name, and a function cannot cross into a client component.
+  const fieldViews = (content: Record<string, string>): PageContentFieldView[] =>
+    contentFields.map((field) => ({
+      key: field.key,
+      label: field.label,
+      multiline: Boolean(field.multiline),
+      value: content[field.key] ?? "",
+      defaultText: field.defaultValue(practiceName),
+    }));
 
   return (
     <div className="grid gap-6">
@@ -51,7 +84,7 @@ export default async function AdminPageSectionsPage({ params }: PageProps<"/admi
           Website
         </Link>
         <h1>{definition.label}</h1>
-        <p className="text-muted-foreground">{definition.blurb} Drag to reorder.</p>
+        <p className="text-muted-foreground">{definition.blurb}</p>
         <Link
           href={definition.href}
           target="_blank"
@@ -63,43 +96,61 @@ export default async function AdminPageSectionsPage({ params }: PageProps<"/admi
         </Link>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Section items</CardTitle>
-          <CardDescription>
-            {definition.sections.length > 1
-              ? "Each tab is its own list — items never move between sections."
-              : "Each card can carry a picture, an icon, or both."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {itemsBySection.status === "error" ? (
-            <ErrorState title={`${definition.label} could not be loaded`} />
-          ) : definition.sections.length === 1 ? (
-            <PageSectionEditor
-              page={page}
-              section={definition.sections[0]}
-              items={itemsBySection.data[definition.sections[0].key] ?? []}
-            />
-          ) : (
-            <Tabs defaultValue={definition.sections[0].key}>
-              <TabsList>
+      {contentFields.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Text</CardTitle>
+            <CardDescription>Headings and body copy. Leave a field blank to use its default text.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {siteContent.status === "ok" ? (
+              <PageContentForm page={page} fields={fieldViews(siteContent.data)} />
+            ) : (
+              <ErrorState title="Page text could not be loaded" />
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {definition.sections.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Card lists</CardTitle>
+            <CardDescription>
+              {definition.sections.length > 1
+                ? "Each tab is its own list — items never move between sections. Drag to reorder."
+                : "Drag to reorder. Each card can carry a picture, an icon, or both."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {itemsBySection === null || itemsBySection.status === "error" ? (
+              <ErrorState title="Card lists could not be loaded" />
+            ) : definition.sections.length === 1 ? (
+              <PageSectionEditor
+                page={page}
+                section={definition.sections[0]}
+                items={itemsBySection.data[definition.sections[0].key] ?? []}
+              />
+            ) : (
+              <Tabs defaultValue={definition.sections[0].key}>
+                <TabsList>
+                  {definition.sections.map((section) => (
+                    <TabsTab key={section.key} value={section.key}>
+                      {section.label}
+                    </TabsTab>
+                  ))}
+                  <TabsIndicator />
+                </TabsList>
                 {definition.sections.map((section) => (
-                  <TabsTab key={section.key} value={section.key}>
-                    {section.label}
-                  </TabsTab>
+                  <TabsPanel key={section.key} value={section.key} className="pt-4">
+                    <PageSectionEditor page={page} section={section} items={itemsBySection.data[section.key] ?? []} />
+                  </TabsPanel>
                 ))}
-                <TabsIndicator />
-              </TabsList>
-              {definition.sections.map((section) => (
-                <TabsPanel key={section.key} value={section.key} className="pt-4">
-                  <PageSectionEditor page={page} section={section} items={itemsBySection.data[section.key] ?? []} />
-                </TabsPanel>
-              ))}
-            </Tabs>
-          )}
-        </CardContent>
-      </Card>
+              </Tabs>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

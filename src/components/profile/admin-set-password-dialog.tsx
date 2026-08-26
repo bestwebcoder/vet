@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { KeyRound } from "lucide-react";
 
-import { Field } from "@/components/form/field";
+import { PasswordField } from "@/components/form/password-field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Button } from "@/components/ui/button";
@@ -46,20 +46,18 @@ export function AdminSetPasswordDialog({ targetUserId, targetName }: { targetUse
           <FormAlert state={state} />
           <input type="hidden" name="targetUserId" value={targetUserId} />
 
-          <Field
+          <PasswordField
             label="New password"
             name="newPassword"
-            type="password"
             autoComplete="new-password"
             required
             hint="At least 10 characters, with an uppercase letter, a lowercase letter and a number."
             errors={state.status === "error" ? state.fieldErrors?.newPassword : undefined}
           />
 
-          <Field
+          <PasswordField
             label="Confirm new password"
             name="confirmPassword"
-            type="password"
             autoComplete="new-password"
             required
             errors={state.status === "error" ? state.fieldErrors?.confirmPassword : undefined}

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 
 import { Field } from "@/components/form/field";
+import { PasswordField } from "@/components/form/password-field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,10 +54,9 @@ export function RegisterForm() {
             errors={fieldErrors?.phone}
           />
 
-          <Field
+          <PasswordField
             label="PIN"
             name="password"
-            type="password"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={6}
@@ -66,10 +66,9 @@ export function RegisterForm() {
             errors={fieldErrors?.password}
           />
 
-          <Field
+          <PasswordField
             label="Confirm PIN"
             name="confirmPassword"
-            type="password"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={6}

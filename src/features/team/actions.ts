@@ -112,7 +112,7 @@ async function grantTeamRole(
 
 /**
  * Grants, changes or removes one role for one person within the admin's own
- * organization — the action behind /admin/team's role select.
+ * organization — the action behind /admin/users's role select.
  *
  * "none" only revokes; anything else revokes whatever was active and grants
  * the new role, same soft-revoke shape as deactivateDoctorAction and
@@ -145,14 +145,14 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
   }
 
   if (role === "none") {
-    revalidatePath("/admin/team");
+    revalidatePath("/admin/users");
     return { status: "success", message: "Role removed." };
   }
 
   const grantResult = await grantTeamRole(supabase, userId, organizationId, role);
   if (grantResult) return grantResult;
 
-  revalidatePath("/admin/team");
+  revalidatePath("/admin/users");
   revalidatePath("/admin/doctors");
   revalidatePath("/admin/clients");
   return { status: "success", message: "Role updated." };
@@ -160,7 +160,7 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
 
 /**
  * Adds a brand new person to the practice — the "Add team member" flow
- * /admin/team was missing entirely: every other route onto the roster
+ * /admin/users was missing entirely: every other route onto the roster
  * (self-registration, inviteDoctorAction) provisions a specific role
  * automatically, and demo seed data aside, nothing created the "registered,
  * no role yet" account this page exists to manage until now.
@@ -214,7 +214,7 @@ export async function inviteTeamMemberAction(_previous: FormState, formData: For
     if (grantResult) return grantResult;
   }
 
-  revalidatePath("/admin/team");
+  revalidatePath("/admin/users");
   revalidatePath("/admin/doctors");
   revalidatePath("/admin/clients");
   return { status: "success", message: `Invitation sent to ${email}.` };
@@ -255,7 +255,7 @@ export async function deleteTeamMemberAction(_previous: FormState, formData: For
     return failure("team", revokeError ?? staffError, "We could not remove this person just now. Please try again.");
   }
 
-  revalidatePath("/admin/team");
+  revalidatePath("/admin/users");
   return { status: "success", message: "Removed from the team." };
 }
 
@@ -279,6 +279,6 @@ export async function restoreTeamMemberAction(_previous: FormState, formData: Fo
     return failure("team", error, "We could not restore this person just now. Please try again.");
   }
 
-  revalidatePath("/admin/team");
+  revalidatePath("/admin/users");
   return { status: "success", message: "Restored to the team." };
 }

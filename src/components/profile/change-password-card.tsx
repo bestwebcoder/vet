@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Field } from "@/components/form/field";
+import { PasswordField } from "@/components/form/password-field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,29 +24,26 @@ export function ChangePasswordCard() {
         <form action={formAction} className="grid gap-5" noValidate>
           <FormAlert state={state} />
 
-          <Field
+          <PasswordField
             label="Current password"
             name="currentPassword"
-            type="password"
             autoComplete="current-password"
             required
             errors={fieldErrors?.currentPassword}
           />
 
-          <Field
+          <PasswordField
             label="New password"
             name="newPassword"
-            type="password"
             autoComplete="new-password"
             required
             hint="At least 10 characters, with an uppercase letter, a lowercase letter and a number."
             errors={fieldErrors?.newPassword}
           />
 
-          <Field
+          <PasswordField
             label="Confirm new password"
             name="confirmPassword"
-            type="password"
             autoComplete="new-password"
             required
             errors={fieldErrors?.confirmPassword}

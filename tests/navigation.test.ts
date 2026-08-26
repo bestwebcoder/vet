@@ -44,7 +44,7 @@ describe("admin navigation is filtered per role", () => {
   it("keeps the practice's own administration out of every narrower role", () => {
     for (const role of ["finance_manager", "lab", "receptionist"] as const) {
       const visible = labels([role]);
-      expect(visible).not.toContain("Team");
+      expect(visible).not.toContain("Users");
       expect(visible).not.toContain("Settings");
       expect(visible).not.toContain("Website");
       expect(visible).not.toContain("Clients");

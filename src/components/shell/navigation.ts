@@ -103,7 +103,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Reports", href: "/admin/reports", icon: FileText, roles: [...ADMINS, "finance_manager"] },
   { label: "Notifications", href: "/admin/notifications", icon: Bell, roles: [...ADMINS, "receptionist"] },
   { label: "Messages", href: "/admin/messages", icon: MessageSquare, roles: [...ADMINS, "receptionist"] },
-  { label: "Team", href: "/admin/team", icon: UserCog },
+  { label: "Users", href: "/admin/users", icon: UserCog },
   { label: "Website", href: "/admin/website", icon: Globe },
   { label: "Settings", href: "/admin/settings", icon: Settings },
 ];

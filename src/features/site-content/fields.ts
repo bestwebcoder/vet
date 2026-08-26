@@ -5,9 +5,16 @@
  * back to its default here, computed against the practice's real name.
  */
 
+/**
+ * `page` uses the same keys as src/lib/page-sections.ts, so one editor can
+ * show a page's text and its card lists together — they are two halves of the
+ * same page, and were previously edited in two different places.
+ */
+export type SiteContentPage = "home" | "about" | "services" | "contact" | "footer";
+
 export type SiteContentField = {
   key: string;
-  page: "Home" | "About" | "Services" | "Contact" | "Footer";
+  page: SiteContentPage;
   label: string;
   multiline?: boolean;
   defaultValue: (practiceName: string) => string;
@@ -16,13 +23,13 @@ export type SiteContentField = {
 export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   {
     key: "home.hero_title",
-    page: "Home",
+    page: "home",
     label: "Hero headline",
     defaultValue: () => "Veterinary care for your pet, organized in one place",
   },
   {
     key: "home.hero_subtitle",
-    page: "Home",
+    page: "home",
     label: "Hero subheading",
     multiline: true,
     defaultValue: (name) =>
@@ -30,19 +37,19 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   },
   {
     key: "home.cta_title",
-    page: "Home",
+    page: "home",
     label: "Closing call-to-action headline",
     defaultValue: () => "Ready to book your pet's next visit?",
   },
   {
     key: "home.cta_subtitle",
-    page: "Home",
+    page: "home",
     label: "Closing call-to-action text",
     defaultValue: () => "Create an account in a couple of minutes — no paperwork required.",
   },
   {
     key: "about.intro",
-    page: "About",
+    page: "about",
     label: "Introduction",
     multiline: true,
     defaultValue: (name) =>
@@ -50,7 +57,7 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   },
   {
     key: "about.how_we_work",
-    page: "About",
+    page: "about",
     label: '"How we work" text',
     multiline: true,
     defaultValue: () =>
@@ -58,7 +65,7 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   },
   {
     key: "services.intro",
-    page: "Services",
+    page: "services",
     label: "Introduction",
     multiline: true,
     defaultValue: (name) =>
@@ -66,14 +73,14 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   },
   {
     key: "contact.intro",
-    page: "Contact",
+    page: "contact",
     label: "Introduction",
     multiline: true,
     defaultValue: () => "Have a question before booking? Send us a message and we'll get back to you.",
   },
   {
     key: "footer.tagline",
-    page: "Footer",
+    page: "footer",
     label: "Tagline",
     multiline: true,
     // Empty by default — nothing shows rather than inventing marketing copy.
@@ -81,7 +88,7 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
   },
   {
     key: "footer.copyright_override",
-    page: "Footer",
+    page: "footer",
     label: "Copyright line",
     defaultValue: (name) => `© ${new Date().getFullYear()} ${name}.`,
   },
@@ -93,4 +100,9 @@ export function siteContentValue(content: Record<string, string>, key: string, p
 
   const field = SITE_CONTENT_FIELDS.find((candidate) => candidate.key === key);
   return field ? field.defaultValue(practiceName) : "";
+}
+
+/** The fields belonging to one page, in registry order. */
+export function siteContentFieldsFor(page: string): SiteContentField[] {
+  return SITE_CONTENT_FIELDS.filter((field) => field.page === page);
 }

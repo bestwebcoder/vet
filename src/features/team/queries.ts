@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * The roster behind /admin/settings' "Team & roles" section.
+ * The roster behind /admin/users.
  *
  * Deliberately not every person in the practice — clients and doctors
  * already have full lifecycle management at /admin/clients and

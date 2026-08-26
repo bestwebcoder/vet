@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { Field } from "@/components/form/field";
+import { PasswordField } from "@/components/form/password-field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,10 +37,9 @@ export function LoginForm() {
           />
 
           <div className="grid gap-2">
-            <Field
+            <PasswordField
               label="Password"
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               errors={fieldErrors?.password}
