@@ -1,3 +1,4 @@
+import { SectionCards } from "@/components/marketing/section-cards";
 import type { SitePageBlock } from "@/features/site-pages/queries";
 
 /** Renders an admin-built custom page's blocks in order — the public counterpart to the /admin/website block editor. */
@@ -58,6 +59,26 @@ function Block({ block }: { block: SitePageBlock }) {
               </div>
             ))}
           </div>
+        </section>
+      );
+    }
+
+    case "cards": {
+      // Shares SectionCards with the fixed pages' sections, so a card built
+      // here looks exactly like one built there.
+      const items = block.content.items.map((item, index) => ({
+        id: `${block.id}-${index}`,
+        icon: item.icon,
+        imageUrl: item.url,
+        title: item.title,
+        description: item.body ?? "",
+      }));
+
+      const columns = items.length >= 4 ? 4 : items.length === 3 ? 3 : 2;
+
+      return (
+        <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+          <SectionCards items={items} variant="cards" columns={columns} />
         </section>
       );
     }

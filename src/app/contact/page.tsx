@@ -4,8 +4,10 @@ import { Mail, MapPin, Phone } from "lucide-react";
 import { ContactForm } from "@/components/marketing/contact-form";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
+import { SectionCards } from "@/components/marketing/section-cards";
 import { Card, CardContent } from "@/components/ui/card";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
+import { getPublicPageSectionItems, type PageSectionItems } from "@/features/page-sections/queries";
 import { siteContentValue } from "@/features/site-content/fields";
 import { getPublicSiteContent } from "@/features/site-content/queries";
 
@@ -14,7 +16,11 @@ export const metadata: Metadata = { title: "Contact Us · TV Care" };
 export default async function ContactPage() {
   const organization = await getPublicOrganizationInfo();
   const practiceName = organization?.name ?? "The Traveling Vet";
-  const content = organization ? await getPublicSiteContent(organization.id) : {};
+  const [content, sections] = await Promise.all([
+    organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
+    organization ? getPublicPageSectionItems(organization.id, "contact") : Promise.resolve<PageSectionItems>({}),
+  ]);
+  const points = sections.points ?? [];
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -79,6 +85,14 @@ export default async function ContactPage() {
                 ) : null}
               </div>
             </div>
+
+            {/* Admin-editable via /admin/website/sections/contact — opening hours, an
+                emergency line, areas covered. Nothing renders until there is something. */}
+            {points.length > 0 ? (
+              <div className="mx-auto mt-12 max-w-4xl">
+                <SectionCards items={points} variant="cards" columns={3} />
+              </div>
+            ) : null}
           </div>
         </section>
       </main>

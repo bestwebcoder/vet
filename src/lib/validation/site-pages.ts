@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ICON_KEYS } from "@/lib/icons";
 import { fullNameSchema, optionalText } from "@/lib/validation/common";
 
 /**
@@ -44,7 +45,7 @@ export const sitePageSettingsSchema = z.object({
 export type SitePageSettingsInput = z.input<typeof sitePageSettingsSchema>;
 export type SitePageSettingsValues = z.output<typeof sitePageSettingsSchema>;
 
-export const BLOCK_TYPES = ["text", "image", "section", "columns"] as const;
+export const BLOCK_TYPES = ["text", "image", "section", "columns", "cards"] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
 export const textBlockSchema = z.object({
@@ -68,4 +69,20 @@ const columnItemSchema = z.object({
 
 export const columnsBlockSchema = z.object({
   items: z.array(columnItemSchema).min(2, "Add at least 2 columns").max(4, "Up to 4 columns"),
+});
+
+/**
+ * The card grid — the same shape the fixed pages' sections render (see
+ * src/lib/page-sections.ts), available to a custom page as a block. Each card
+ * carries an optional icon, an optional picture, and its text; the picture's
+ * storage path is written by the action, never posted by the browser.
+ */
+const cardItemSchema = z.object({
+  icon: z.enum(ICON_KEYS).nullable(),
+  title: z.string().trim().min(1, "Enter a title").max(80, "Keep the title under 80 characters"),
+  body: optionalText(300, "Card text"),
+});
+
+export const cardsBlockSchema = z.object({
+  items: z.array(cardItemSchema).min(1, "Add at least 1 card").max(8, "Up to 8 cards"),
 });

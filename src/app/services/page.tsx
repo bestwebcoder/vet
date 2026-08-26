@@ -7,7 +7,9 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionCards } from "@/components/marketing/section-cards";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
+import { getPublicPageSectionItems, type PageSectionItems } from "@/features/page-sections/queries";
 import { getPublicServices, type ServiceSummary } from "@/features/services/queries";
 import { siteContentValue } from "@/features/site-content/fields";
 import { getPublicSiteContent } from "@/features/site-content/queries";
@@ -29,7 +31,11 @@ function groupByCategory(services: ServiceSummary[]) {
 export default async function ServicesPage() {
   const [organization, servicesResult] = await Promise.all([getPublicOrganizationInfo(), getPublicServices()]);
   const practiceName = organization?.name ?? "The Traveling Vet";
-  const content = organization ? await getPublicSiteContent(organization.id) : {};
+  const [content, sections] = await Promise.all([
+    organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
+    organization ? getPublicPageSectionItems(organization.id, "services") : Promise.resolve<PageSectionItems>({}),
+  ]);
+  const highlights = sections.highlights ?? [];
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -48,6 +54,13 @@ export default async function ServicesPage() {
             </p>
           </div>
         </section>
+
+        {/* Admin-editable via /admin/website/sections/services — sits above the priced list. */}
+        {highlights.length > 0 ? (
+          <section className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6">
+            <SectionCards items={highlights} variant="cards" columns={3} />
+          </section>
+        ) : null}
 
         <section className="border-border/60 border-t bg-muted/40">
           <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">

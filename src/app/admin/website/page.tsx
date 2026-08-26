@@ -9,8 +9,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getOwnOrganization } from "@/features/organizations/queries";
+import { countPageSectionItemsForAdmin } from "@/features/page-sections/queries";
 import { getSiteContentForAdmin } from "@/features/site-content/queries";
 import { listSitePagesForAdmin } from "@/features/site-pages/queries";
+import { PAGE_SECTIONS } from "@/lib/page-sections";
 
 export const metadata: Metadata = { title: "Website · TV Care" };
 
@@ -27,10 +29,11 @@ export default async function AdminWebsitePage() {
     );
   }
 
-  const [organization, siteContent, sitePages] = await Promise.all([
+  const [organization, siteContent, sitePages, sectionCounts] = await Promise.all([
     getOwnOrganization(organizationId),
     getSiteContentForAdmin(organizationId),
     listSitePagesForAdmin(organizationId),
+    countPageSectionItemsForAdmin(organizationId),
   ]);
 
   const practiceName = organization.status === "ok" ? (organization.data?.name ?? "The Traveling Vet") : "The Traveling Vet";
@@ -54,19 +57,39 @@ export default async function AdminWebsitePage() {
         </Card>
       </Link>
 
-      <Link href="/admin/website/home-sections" className="block">
-        <Card className="transition-colors hover:bg-muted/50">
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <div className="grid gap-1.5">
-              <CardTitle className="text-base">Home page sections</CardTitle>
-              <CardDescription>
-                &ldquo;What we offer&rdquo;, &ldquo;Why pet owners choose&rdquo; and &ldquo;How it works&rdquo; — reorder items and edit their text.
-              </CardDescription>
-            </div>
-            <ChevronRight className="text-muted-foreground size-5 shrink-0" aria-hidden />
-          </CardHeader>
-        </Card>
-      </Link>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Page sections</CardTitle>
+          <CardDescription>
+            The card lists on each fixed page — reorder them, edit their text, and give each card a picture.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {PAGE_SECTIONS.map((definition) => {
+            const count = sectionCounts.status === "ok" ? sectionCounts.data[definition.key] : null;
+            return (
+              <Link key={definition.key} href={`/admin/website/sections/${definition.key}`} className="block">
+                <Card className="transition-colors hover:bg-muted/50">
+                  <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+                    <div className="grid gap-1.5">
+                      <CardTitle className="text-base">{definition.label}</CardTitle>
+                      <CardDescription>{definition.blurb}</CardDescription>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {count === null ? null : (
+                        <span className="text-muted-foreground text-sm tabular-nums">
+                          {count} {count === 1 ? "item" : "items"}
+                        </span>
+                      )}
+                      <ChevronRight className="text-muted-foreground size-5" aria-hidden />
+                    </div>
+                  </CardHeader>
+                </Card>
+              </Link>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -89,7 +112,7 @@ export default async function AdminWebsitePage() {
           <div className="grid gap-1.5">
             <CardTitle className="text-base">Custom pages</CardTitle>
             <CardDescription>
-              Pages beyond the four above, built from blocks — text, images, section headings and columns.
+              Pages beyond the four above, built from blocks — text, images, section headings, columns and card grids.
             </CardDescription>
           </div>
           <Link href="/admin/website/pages/new" className={buttonVariants({ size: "touch" })}>

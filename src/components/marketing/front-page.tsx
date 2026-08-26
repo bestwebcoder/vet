@@ -4,15 +4,14 @@ import { CalendarDays, Stethoscope } from "lucide-react";
 import { HeroCarousel } from "@/components/marketing/hero-carousel";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
+import { SectionCards } from "@/components/marketing/section-cards";
 import { TeamGallery } from "@/components/marketing/team-gallery";
 import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import type { PublicDoctor } from "@/features/doctors/queries";
-import type { HomeSectionItemsBySection } from "@/features/home-sections/queries";
 import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image-constants";
+import type { PageSectionItems } from "@/features/page-sections/queries";
 import type { PublicOrganizationInfo } from "@/features/organizations/queries";
 import { siteContentValue } from "@/features/site-content/fields";
-import { iconByKey } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 export function FrontPage({
@@ -27,8 +26,8 @@ export function FrontPage({
   leadDoctor: PublicDoctor | null;
   doctors: PublicDoctor[];
   content: Record<string, string>;
-  /** "What we offer" / "Why pet owners choose" / "How it works" — admin-editable via /admin/website/home-sections. */
-  homeSections: HomeSectionItemsBySection;
+  /** "What we offer" / "Why pet owners choose" / "How it works" — admin-editable via /admin/website/sections/home. */
+  homeSections: PageSectionItems;
   /**
    * Set when the visitor is already signed in. The header keeps its own
    * single "Go to dashboard" button (PublicHeader); everywhere else on this
@@ -41,6 +40,10 @@ export function FrontPage({
 }) {
   const practiceName = organization?.name ?? "The Traveling Vet";
   const text = (key: string) => siteContentValue(content, key, practiceName);
+
+  const services = homeSections.services ?? [];
+  const why = homeSections.why ?? [];
+  const howItWorks = homeSections.how_it_works ?? [];
 
   // The admin's own hero gallery (Settings) drives the slideshow. Until one
   // is uploaded, fall back to a handful of doctors with an admin-uploaded
@@ -110,27 +113,12 @@ export function FrontPage({
         </section>
 
         {/* Services */}
-        {homeSections.services.length > 0 ? (
+        {services.length > 0 ? (
           <section className="border-border/60 border-t bg-muted/40">
             <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
               <h2 className="text-center text-2xl font-semibold tracking-tight">What we offer</h2>
-              <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {homeSections.services.map((item) => {
-                  const Icon = iconByKey(item.icon);
-                  return (
-                    <Card key={item.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
-                      <CardContent className="grid gap-3">
-                        {Icon ? (
-                          <span className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-full">
-                            <Icon className="size-5" aria-hidden />
-                          </span>
-                        ) : null}
-                        <p className="font-medium">{item.title}</p>
-                        <p className="text-muted-foreground text-sm">{item.description}</p>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="mt-10">
+                <SectionCards items={services} variant="cards" columns={4} />
               </div>
             </div>
           </section>
@@ -169,45 +157,22 @@ export function FrontPage({
         <TeamGallery doctors={doctors} />
 
         {/* Why TV Care */}
-        {homeSections.why.length > 0 ? (
+        {why.length > 0 ? (
           <section className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-            <h2 className="text-center text-2xl font-semibold tracking-tight">Why pet owners choose TV Care</h2>
-            <div className="mt-10 grid gap-6 sm:grid-cols-2">
-              {homeSections.why.map((item) => {
-                const Icon = iconByKey(item.icon);
-                return (
-                  <div key={item.id} className="flex gap-4">
-                    {Icon ? (
-                      <span className="bg-primary/10 text-primary flex size-11 shrink-0 items-center justify-center rounded-full">
-                        <Icon className="size-5" aria-hidden />
-                      </span>
-                    ) : null}
-                    <div className="grid gap-1">
-                      <p className="font-medium">{item.title}</p>
-                      <p className="text-muted-foreground text-sm">{item.description}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            <h2 className="text-center text-2xl font-semibold tracking-tight">Why pet owners choose {practiceName}</h2>
+            <div className="mt-10">
+              <SectionCards items={why} variant="rows" />
             </div>
           </section>
         ) : null}
 
         {/* How it works */}
-        {homeSections.how_it_works.length > 0 ? (
+        {howItWorks.length > 0 ? (
           <section className="border-border/60 border-t bg-muted/40">
             <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
               <h2 className="text-center text-2xl font-semibold tracking-tight">How it works</h2>
-              <div className="mt-10 grid gap-6 sm:grid-cols-3">
-                {homeSections.how_it_works.map((item, index) => (
-                  <div key={item.id} className="grid gap-2 text-center sm:text-left">
-                    <span className="bg-primary text-primary-foreground mx-auto flex size-9 items-center justify-center rounded-full text-sm font-semibold sm:mx-0">
-                      {index + 1}
-                    </span>
-                    <p className="font-medium">{item.title}</p>
-                    <p className="text-muted-foreground text-sm">{item.description}</p>
-                  </div>
-                ))}
+              <div className="mt-10">
+                <SectionCards items={howItWorks} variant="steps" />
               </div>
             </div>
           </section>

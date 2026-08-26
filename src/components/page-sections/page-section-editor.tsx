@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -8,7 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Trash2 } from "lucide-react";
 
 import { FormAlert } from "@/components/form/form-alert";
-import { HomeSectionItemForm } from "@/components/home-sections/home-section-item-form";
+import { PageSectionItemForm } from "@/components/page-sections/page-section-item-form";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,13 +20,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { deleteHomeSectionItemAction, reorderHomeSectionItemsAction } from "@/features/home-sections/actions";
-import type { HomeSectionItem } from "@/features/home-sections/queries";
+import { deletePageSectionItemAction, reorderPageSectionItemsAction } from "@/features/page-sections/actions";
+import type { PageSectionItem } from "@/features/page-sections/queries";
 import { iconByKey } from "@/lib/icons";
 import { idleState, type FormState } from "@/lib/forms";
-import type { HomeSection } from "@/lib/validation/home-sections";
+import type { SectionDefinition } from "@/lib/page-sections";
 
-function DeleteItemDialog({ item, onDeleted }: { item: HomeSectionItem; onDeleted: () => void }) {
+function DeleteItemDialog({ item, page, onDeleted }: { item: PageSectionItem; page: string; onDeleted: () => void }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [state, setState] = useState<FormState>(idleState);
@@ -34,7 +35,8 @@ function DeleteItemDialog({ item, onDeleted }: { item: HomeSectionItem; onDelete
     setPending(true);
     const formData = new FormData();
     formData.set("itemId", item.id);
-    const result = await deleteHomeSectionItemAction(idleState, formData);
+    formData.set("page", page);
+    const result = await deletePageSectionItemAction(idleState, formData);
     setPending(false);
     if (result.status === "success") {
       setOpen(false);
@@ -52,7 +54,7 @@ function DeleteItemDialog({ item, onDeleted }: { item: HomeSectionItem; onDelete
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Remove {item.title}?</DialogTitle>
-          <DialogDescription>This removes it from the home page.</DialogDescription>
+          <DialogDescription>This removes it from the page, along with its picture.</DialogDescription>
         </DialogHeader>
         <FormAlert state={state} />
         <DialogFooter>
@@ -70,13 +72,15 @@ function DeleteItemDialog({ item, onDeleted }: { item: HomeSectionItem; onDelete
 
 function SortableItemRow({
   item,
+  page,
   section,
   iconNode,
   stepNumber,
   onDeleted,
 }: {
-  item: HomeSectionItem;
-  section: HomeSection;
+  item: PageSectionItem;
+  page: string;
+  section: SectionDefinition;
   /** Already-rendered, not a component reference — resolved in the parent's .map(), which (unlike this component's own body) React's lint rules don't treat as a "components created during render" risk. */
   iconNode: React.ReactNode;
   stepNumber: number | null;
@@ -100,9 +104,20 @@ function SortableItemRow({
         <GripVertical className="size-4" aria-hidden />
       </button>
 
-      <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
-        {iconNode ?? stepNumber}
-      </span>
+      {item.imageUrl ? (
+        <Image
+          src={item.imageUrl}
+          alt=""
+          width={64}
+          height={36}
+          className="bg-muted h-9 w-16 shrink-0 rounded object-cover"
+          unoptimized
+        />
+      ) : (
+        <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+          {iconNode ?? stepNumber}
+        </span>
+      )}
 
       <div className="grid min-w-0 flex-1 gap-0.5">
         <p className="truncate font-medium">{item.title}</p>
@@ -114,19 +129,29 @@ function SortableItemRow({
             down from the server) remounts the dialog with the saved values
             as its defaultValue, instead of Base UI warning about an
             uncontrolled field's initial value changing post-mount. */}
-        <HomeSectionItemForm
-          key={`${item.id}:${item.title}:${item.description}:${item.icon}`}
+        <PageSectionItemForm
+          key={`${item.id}:${item.title}:${item.description}:${item.icon}:${item.imagePath}`}
           mode="edit"
+          page={page}
           section={section}
           item={item}
         />
-        <DeleteItemDialog item={item} onDeleted={onDeleted} />
+        <DeleteItemDialog item={item} page={page} onDeleted={onDeleted} />
       </div>
     </div>
   );
 }
 
-export function HomeSectionEditor({ section, items }: { section: HomeSection; items: HomeSectionItem[] }) {
+/** One section's card list: drag to reorder, edit or remove in place, add at the bottom. */
+export function PageSectionEditor({
+  page,
+  section,
+  items,
+}: {
+  page: string;
+  section: SectionDefinition;
+  items: PageSectionItem[];
+}) {
   const router = useRouter();
   const [order, setOrder] = useState(() => items.map((item) => item.id));
   const byId = new Map(items.map((item) => [item.id, item]));
@@ -152,9 +177,10 @@ export function HomeSectionEditor({ section, items }: { section: HomeSection; it
     setOrder(nextOrder);
 
     const formData = new FormData();
-    formData.set("section", section);
+    formData.set("page", page);
+    formData.set("section", section.key);
     formData.set("order", JSON.stringify(nextOrder));
-    const result = await reorderHomeSectionItemsAction(idleState, formData);
+    const result = await reorderPageSectionItemsAction(idleState, formData);
     setSaveState(result);
     if (result.status === "success") router.refresh();
   }
@@ -165,9 +191,16 @@ export function HomeSectionEditor({ section, items }: { section: HomeSection; it
 
   return (
     <div className="grid gap-4">
+      <p className="text-muted-foreground text-sm">{section.description}</p>
+
       <FormAlert state={saveState} />
 
-      <DndContext id={`home-section-${section}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        id={`page-section-${page}-${section.key}`}
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <div className="grid gap-2">
             {order.map((id, index) => {
@@ -178,9 +211,10 @@ export function HomeSectionEditor({ section, items }: { section: HomeSection; it
                 <SortableItemRow
                   key={id}
                   item={item}
+                  page={page}
                   section={section}
                   iconNode={Icon ? <Icon className="size-4" aria-hidden /> : null}
-                  stepNumber={section === "how_it_works" ? index + 1 : null}
+                  stepNumber={section.usesIcon ? null : index + 1}
                   onDeleted={refreshFromServer}
                 />
               );
@@ -191,7 +225,7 @@ export function HomeSectionEditor({ section, items }: { section: HomeSection; it
 
       {items.length === 0 ? <p className="text-muted-foreground text-sm">Nothing here yet — add the first item below.</p> : null}
 
-      <HomeSectionItemForm mode="create" section={section} />
+      <PageSectionItemForm mode="create" page={page} section={section} />
     </div>
   );
 }

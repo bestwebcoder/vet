@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { Columns3, Heading, ImagePlus, Type } from "lucide-react";
+import { Columns3, Heading, ImagePlus, LayoutGrid, Type } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { addBlockAction } from "@/features/site-pages/actions";
@@ -14,6 +14,7 @@ const BLOCK_OPTIONS: { type: BlockType; label: string; icon: typeof Type }[] = [
   { type: "image", label: "Image", icon: ImagePlus },
   { type: "section", label: "Section heading", icon: Heading },
   { type: "columns", label: "Columns", icon: Columns3 },
+  { type: "cards", label: "Cards", icon: LayoutGrid },
 ];
 
 function AddButton({ label, icon: Icon }: { label: string; icon: typeof Type }) {
@@ -26,7 +27,7 @@ function AddButton({ label, icon: Icon }: { label: string; icon: typeof Type }) 
   );
 }
 
-/** The whole "add a block" UI — four buttons, each its own tiny form so one pending state never blocks another. */
+/** The whole "add a block" UI — one button per block type, each its own tiny form so one pending state never blocks another. */
 export function AddBlockBar({ pageId }: { pageId: string }) {
   return (
     <div className="flex flex-wrap gap-2">

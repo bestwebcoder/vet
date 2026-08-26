@@ -22,12 +22,15 @@ export type TextBlockContent = { heading: string | null; body: string };
 export type ImageBlockContent = { path: string | null; url: string | null; caption: string | null };
 export type SectionBlockContent = { heading: string; body: string | null };
 export type ColumnsBlockContent = { items: { heading: string | null; body: string | null }[] };
+export type CardsBlockItem = { icon: string | null; title: string; body: string | null; path: string | null; url: string | null };
+export type CardsBlockContent = { items: CardsBlockItem[] };
 
 export type SitePageBlock =
   | { id: string; position: number; blockType: "text"; content: TextBlockContent }
   | { id: string; position: number; blockType: "image"; content: ImageBlockContent }
   | { id: string; position: number; blockType: "section"; content: SectionBlockContent }
-  | { id: string; position: number; blockType: "columns"; content: ColumnsBlockContent };
+  | { id: string; position: number; blockType: "columns"; content: ColumnsBlockContent }
+  | { id: string; position: number; blockType: "cards"; content: CardsBlockContent };
 
 export type SitePageDetail = SitePageSummary & { blocks: SitePageBlock[] };
 
@@ -57,6 +60,21 @@ function toBlock(row: any): SitePageBlock {
       return { id: row.id, position: row.position, blockType: "section", content: { heading: content.heading ?? "", body: content.body ?? null } };
     case "columns":
       return { id: row.id, position: row.position, blockType: "columns", content: { items: Array.isArray(content.items) ? content.items : [] } };
+    case "cards":
+      return {
+        id: row.id,
+        position: row.position,
+        blockType: "cards",
+        content: {
+          items: (Array.isArray(content.items) ? content.items : []).map((item: any) => ({
+            icon: item.icon ?? null,
+            title: item.title ?? "",
+            body: item.body ?? null,
+            path: item.path ?? null,
+            url: item.path ? blockImagePublicUrl(item.path) : null,
+          })),
+        },
+      };
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -9,6 +9,7 @@ import { GripVertical, LayoutTemplate } from "lucide-react";
 
 import { AddBlockBar } from "@/components/site-pages/block-editor/add-block-bar";
 import { BlockControls } from "@/components/site-pages/block-editor/block-controls";
+import { CardsBlockEditor } from "@/components/site-pages/block-editor/cards-block-editor";
 import { ColumnsBlockEditor } from "@/components/site-pages/block-editor/columns-block-editor";
 import { ImageBlockEditor } from "@/components/site-pages/block-editor/image-block-editor";
 import { SectionBlockEditor } from "@/components/site-pages/block-editor/section-block-editor";
@@ -25,6 +26,7 @@ const BLOCK_LABELS: Record<SitePageBlock["blockType"], string> = {
   image: "Image",
   section: "Section heading",
   columns: "Columns",
+  cards: "Cards",
 };
 
 function BlockEditor({ pageId, block }: { pageId: string; block: SitePageBlock }) {
@@ -37,6 +39,8 @@ function BlockEditor({ pageId, block }: { pageId: string; block: SitePageBlock }
       return <SectionBlockEditor pageId={pageId} blockId={block.id} content={block.content} />;
     case "columns":
       return <ColumnsBlockEditor pageId={pageId} blockId={block.id} content={block.content} />;
+    case "cards":
+      return <CardsBlockEditor pageId={pageId} blockId={block.id} content={block.content} />;
   }
 }
 
@@ -115,7 +119,7 @@ export function SitePageBlocksEditor({ pageId, blocks }: { pageId: string; block
             <EmptyState
               icon={LayoutTemplate}
               title="This page is empty"
-              description="Add a block below to start building it — text, an image, a section heading, or a columned feature list."
+              description="Add a block below to start building it — text, an image, a section heading, a columned list, or a grid of cards."
             />
           </CardContent>
         </Card>

@@ -53,3 +53,41 @@ export async function uploadBlockImage(
 
   return { ok: true, path };
 }
+
+/**
+ * A cards block's per-card picture. Unlike the image block above — one fixed
+ * path per block, upsert-overwritten — a card's picture gets a fresh uuid per
+ * upload, so replacing one changes the public URL and no CDN can keep serving
+ * the previous picture. The superseded object is removed by the caller.
+ */
+export function cardImagePath(organizationId: string, contentType: string) {
+  const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
+  return `${organizationId}/pages/cards/${crypto.randomUUID()}.${extension}`;
+}
+
+export async function uploadCardImage(
+  organizationId: string,
+  file: File,
+): Promise<{ ok: true; path: string } | { ok: false }> {
+  const supabase = await createClient();
+  const path = cardImagePath(organizationId, file.type);
+
+  const { error } = await supabase.storage.from("site-images").upload(path, file, { contentType: file.type });
+
+  if (error) {
+    console.error("[site-pages] card image upload failed", error);
+    return { ok: false };
+  }
+
+  return { ok: true, path };
+}
+
+/** Best effort — the block's jsonb is the source of truth, so a stray object is wasted space, not a correctness problem. */
+export async function removeBlockImageObject(path: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.storage.from("site-images").remove([path]);
+
+  if (error) {
+    console.error("[site-pages] block image removal failed", error);
+  }
+}

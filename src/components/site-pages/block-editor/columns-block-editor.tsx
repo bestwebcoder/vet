@@ -21,6 +21,18 @@ export function ColumnsBlockEditor({ pageId, blockId, content }: { pageId: strin
 
   const [items, setItems] = useState(content.items.length >= MIN_COLUMNS ? content.items : [...content.items, { heading: "", body: "" }, { heading: "", body: "" }].slice(0, Math.max(MIN_COLUMNS, content.items.length)));
 
+  // React resets an action form's uncontrolled fields once the action
+  // resolves, and they fall back to whatever `defaultValue` says at that
+  // moment. Without this, that is the pre-save `items`, so a successful save
+  // visibly reverts every column to the text it had before the edit — the
+  // stored value is correct, but the editor says otherwise. Re-seed from the
+  // server's new content as it arrives.
+  const [lastContent, setLastContent] = useState(content);
+  if (content !== lastContent) {
+    setLastContent(content);
+    if (content.items.length >= MIN_COLUMNS) setItems(content.items);
+  }
+
   return (
     <form action={formAction} className="grid gap-4" noValidate>
       <FormAlert state={state} />

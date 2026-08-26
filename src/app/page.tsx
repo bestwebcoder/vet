@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/features/auth/actions";
 import { getPublicDoctors } from "@/features/doctors/queries";
-import { getPublicHomeSectionItems } from "@/features/home-sections/queries";
+import { getPublicPageSectionItems } from "@/features/page-sections/queries";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 import { getPublicSiteContent } from "@/features/site-content/queries";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
@@ -31,7 +31,7 @@ export default async function RootPage() {
     const [content, homeSections] = await Promise.all([
       organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
       organization
-        ? getPublicHomeSectionItems(organization.id)
+        ? getPublicPageSectionItems(organization.id, "home")
         : Promise.resolve({ services: [], why: [], how_it_works: [] }),
     ]);
     const doctors = doctorsResult.status === "ok" ? doctorsResult.data : [];

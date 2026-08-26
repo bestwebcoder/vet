@@ -4,10 +4,17 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
-import { describeBlockImageProblem, readBlockImage, uploadBlockImage } from "@/features/site-pages/block-image";
+import {
+  describeBlockImageProblem,
+  readBlockImage,
+  removeBlockImageObject,
+  uploadBlockImage,
+  uploadCardImage,
+} from "@/features/site-pages/block-image";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import {
+  cardsBlockSchema,
   columnsBlockSchema,
   sectionBlockSchema,
   sitePageSettingsSchema,
@@ -129,6 +136,7 @@ export async function addBlockAction(_previous: FormState, formData: FormData): 
     image: {},
     section: { heading: "" },
     columns: { items: [{ heading: "", body: "" }, { heading: "", body: "" }] },
+    cards: { items: [{ icon: null, title: "", body: null, path: null }] },
   };
 
   const { error } = await supabase
@@ -308,4 +316,80 @@ export async function updateImageBlockAction(_previous: FormState, formData: For
 
   revalidatePath(`/admin/website/pages/${pageId}`);
   return { status: "success", message: "Image saved." };
+}
+
+/**
+ * One save covers every card in the block: their text, and any pictures newly
+ * picked or cleared. Cards are positional — the form posts `cardCount` and
+ * `card-<index>-*` fields — so reordering or removing one is a matter of the
+ * browser re-posting the list it now holds.
+ */
+export async function updateCardsBlockAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireRole("admin", "super_admin");
+  const organizationId = user.organizationIds[0];
+  if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
+
+  const pageId = text(formData, "pageId");
+  const blockId = text(formData, "blockId");
+  if (!pageId || !blockId) return { status: "error", message: "We could not tell which block this is." };
+
+  const count = Number(text(formData, "cardCount") ?? "0");
+  const items = Array.from({ length: count }, (_, index) => ({
+    icon: text(formData, `card-${index}-icon`) ?? null,
+    title: text(formData, `card-${index}-title`) ?? "",
+    body: text(formData, `card-${index}-body`) ?? null,
+  }));
+
+  const parsed = cardsBlockSchema.safeParse({ items });
+  if (!parsed.success) return invalid(parsed.error);
+
+  const supabase = await createClient();
+
+  // The stored paths, so a card that keeps its picture keeps it, and one that
+  // replaces or clears it leaves no object behind.
+  const { data: existing } = await supabase.from("site_page_blocks").select("content").eq("id", blockId).maybeSingle();
+  const storedItems: { path?: string | null }[] = Array.isArray(existing?.content?.items) ? existing.content.items : [];
+
+  const superseded: string[] = [];
+  const withImages = [];
+
+  for (const [index, item] of parsed.data.items.entries()) {
+    const previousPath = storedItems[index]?.path ?? null;
+    const file = formData.get(`card-${index}-image`);
+    const cleared = formData.get(`card-${index}-removeImage`) === "on";
+
+    let path: string | null = previousPath;
+
+    if (file instanceof File && file.size > 0) {
+      const problem = describeBlockImageProblem(file);
+      if (problem) {
+        return { status: "error", message: "Please correct the highlighted fields.", fieldErrors: { [`card-${index}-image`]: [problem] } };
+      }
+
+      const upload = await uploadCardImage(organizationId, file);
+      if (!upload.ok) return { status: "error", message: "We could not upload that image just now. Please try again." };
+
+      path = upload.path;
+      if (previousPath) superseded.push(previousPath);
+    } else if (cleared) {
+      path = null;
+      if (previousPath) superseded.push(previousPath);
+    }
+
+    withImages.push({ icon: item.icon, title: item.title, body: item.body, path });
+  }
+
+  // Cards removed from the end of the list leave their pictures behind otherwise.
+  for (const stored of storedItems.slice(parsed.data.items.length)) {
+    if (stored?.path) superseded.push(stored.path);
+  }
+
+  const { error } = await supabase.from("site_page_blocks").update({ content: { items: withImages } }).eq("id", blockId);
+
+  if (error) return failure("site-pages", error, "We could not save that block just now. Please try again.");
+
+  for (const path of superseded) await removeBlockImageObject(path);
+
+  revalidatePath(`/admin/website/pages/${pageId}`);
+  return { status: "success", message: "Block saved." };
 }
