@@ -5,17 +5,20 @@ import { ReportTable } from "@/components/reports/report-table";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getClinicalSummary, getCommonDiagnoses } from "@/features/reports/queries";
-import type { DateRange } from "@/lib/validation/date-range";
+import { readReportPage, singleValued, type DateRange } from "@/lib/validation/date-range";
 
 /** §8.2 — shared between `/admin/reports/clinical` and `/doctor/reports/clinical`. */
 export async function ClinicalReportView({
   organizationId,
   range,
   basePath,
+  searchParams,
 }: {
   organizationId: string;
   range: DateRange;
   basePath: string;
+  /** Raw params from the page, so each table can read its own page number. */
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const [summaryResult, diagnosesResult] = await Promise.all([
     getClinicalSummary(organizationId, range),
@@ -60,6 +63,10 @@ export async function ClinicalReportView({
                 columns={["Diagnosis", "Occurrences"]}
                 rows={diagnosesResult.data.map((row) => [row.description, row.occurrences])}
                 emptyMessage="No diagnoses recorded in this range."
+                pageParam="diagnoses"
+                page={readReportPage(searchParams, "diagnoses")}
+                basePath={basePath}
+                searchParams={singleValued(searchParams)}
               />
             </CardContent>
           </Card>

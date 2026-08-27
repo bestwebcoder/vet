@@ -31,3 +31,20 @@ export function readDateRange(searchParams: Record<string, string | string[] | u
   const parsed = dateRangeSchema.safeParse({ from, to });
   return parsed.success ? parsed.data : defaultDateRange();
 }
+
+/**
+ * One report screen carries several independent tables, so each reads its own
+ * page parameter — `?byService=2` moves that table and leaves the rest alone.
+ */
+export function readReportPage(searchParams: Record<string, string | string[] | undefined>, key: string): number {
+  const raw = searchParams[key];
+  const value = typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 1;
+}
+
+/** Search params narrowed to the single-valued entries Pagination preserves. */
+export function singleValued(searchParams: Record<string, string | string[] | undefined>): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.entries(searchParams).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}

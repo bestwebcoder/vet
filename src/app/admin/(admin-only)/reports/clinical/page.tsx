@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Clinical reports · TV Care" };
 
 export default async function AdminClinicalReportsPage({ searchParams }: PageProps<"/admin/reports/clinical">) {
   const user = await requireRole("admin", "super_admin");
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   if (!organizationId) {
@@ -35,7 +36,7 @@ export default async function AdminClinicalReportsPage({ searchParams }: PagePro
         <h1>Clinical reports</h1>
       </div>
 
-      <ClinicalReportView organizationId={organizationId} range={range} basePath="/admin/reports/clinical" />
+      <ClinicalReportView organizationId={organizationId} range={range} basePath="/admin/reports/clinical" searchParams={params} />
     </div>
   );
 }

@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: "Financial reports · TV Care" };
 
 export default async function AdminFinancialReportsPage({ searchParams }: PageProps<"/admin/reports/financial">) {
   const user = await requireRole(...ACCESS.finance);
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   if (!organizationId) {
@@ -36,7 +37,7 @@ export default async function AdminFinancialReportsPage({ searchParams }: PagePr
         <h1>Financial reports</h1>
       </div>
 
-      <FinancialReportView organizationId={organizationId} range={range} basePath="/admin/reports/financial" />
+      <FinancialReportView organizationId={organizationId} range={range} basePath="/admin/reports/financial" searchParams={params} />
     </div>
   );
 }

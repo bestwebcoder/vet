@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: "Client reports · TV Care" };
 
 export default async function AdminClientReportsPage({ searchParams }: PageProps<"/admin/reports/clients">) {
   const user = await requireRole("admin", "super_admin");
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   if (!organizationId) {

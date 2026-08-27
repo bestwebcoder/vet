@@ -5,7 +5,7 @@ import { ReportTable } from "@/components/reports/report-table";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFrequentPatients, getPatientSpeciesBreakdown } from "@/features/reports/queries";
-import type { DateRange } from "@/lib/validation/date-range";
+import { readReportPage, singleValued, type DateRange } from "@/lib/validation/date-range";
 
 /** §8.4's three literal buckets — the underlying report stays per-species for reuse elsewhere. */
 function groupBySpeciesBucket(rows: { speciesName: string; count: number }[]) {
@@ -31,10 +31,13 @@ export async function PatientReportView({
   organizationId,
   range,
   basePath,
+  searchParams,
 }: {
   organizationId: string;
   range: DateRange;
   basePath: string;
+  /** Raw params from the page, so each table can read its own page number. */
+  searchParams: Record<string, string | string[] | undefined>;
 }) {
   const [speciesResult, frequentResult] = await Promise.all([
     getPatientSpeciesBreakdown(organizationId, range),
@@ -71,6 +74,10 @@ export async function PatientReportView({
                 columns={["Patient", "Visits"]}
                 rows={frequentResult.data.map((row) => [row.petName, row.visitCount])}
                 emptyMessage="No visits in this range."
+                pageParam="frequent"
+                page={readReportPage(searchParams, "frequent")}
+                basePath={basePath}
+                searchParams={singleValued(searchParams)}
               />
             </CardContent>
           </Card>

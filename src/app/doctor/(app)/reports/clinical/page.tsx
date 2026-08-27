@@ -14,7 +14,8 @@ export const metadata: Metadata = { title: "Clinical reports · TV Care" };
 
 export default async function DoctorClinicalReportsPage({ searchParams }: PageProps<"/doctor/reports/clinical">) {
   const user = await requireRole("doctor");
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   const doctor = await getOwnDoctorRecord();
@@ -46,7 +47,7 @@ export default async function DoctorClinicalReportsPage({ searchParams }: PagePr
           </CardContent>
         </Card>
       ) : (
-        <ClinicalReportView organizationId={organizationId} range={range} basePath="/doctor/reports/clinical" />
+        <ClinicalReportView organizationId={organizationId} range={range} basePath="/doctor/reports/clinical" searchParams={params} />
       )}
     </div>
   );

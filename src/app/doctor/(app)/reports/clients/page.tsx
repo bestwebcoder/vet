@@ -14,7 +14,8 @@ export const metadata: Metadata = { title: "Client reports · TV Care" };
 
 export default async function DoctorClientReportsPage({ searchParams }: PageProps<"/doctor/reports/clients">) {
   const user = await requireRole("doctor");
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   const doctor = await getOwnDoctorRecord();

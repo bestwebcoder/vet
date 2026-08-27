@@ -14,7 +14,8 @@ export const metadata: Metadata = { title: "Financial reports · TV Care" };
 
 export default async function DoctorFinancialReportsPage({ searchParams }: PageProps<"/doctor/reports/financial">) {
   const user = await requireRole("doctor");
-  const range = readDateRange(await searchParams);
+  const params = await searchParams;
+  const range = readDateRange(params);
   const organizationId = user.organizationIds[0];
 
   const doctor = await getOwnDoctorRecord();
@@ -46,7 +47,7 @@ export default async function DoctorFinancialReportsPage({ searchParams }: PageP
           </CardContent>
         </Card>
       ) : (
-        <FinancialReportView organizationId={organizationId} range={range} basePath="/doctor/reports/financial" />
+        <FinancialReportView organizationId={organizationId} range={range} basePath="/doctor/reports/financial" searchParams={params} />
       )}
     </div>
   );
