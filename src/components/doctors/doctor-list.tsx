@@ -4,9 +4,7 @@ import { useActionState, useState } from "react";
 import { Pencil, UserRound } from "lucide-react";
 
 import { DoctorEditForm } from "@/components/doctors/doctor-edit-form";
-import { DoctorPhotoForm } from "@/components/doctors/doctor-photo-form";
 import { AdminChangeEmailDialog } from "@/components/profile/admin-change-email-dialog";
-import { AdminIdentityForm } from "@/components/profile/admin-identity-form";
 import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,10 +57,6 @@ function EditDoctorDialog({ doctor, branches }: { doctor: DoctorSummary; branche
         <DialogHeader>
           <DialogTitle>Edit {doctor.fullName}</DialogTitle>
         </DialogHeader>
-        <AdminIdentityForm targetUserId={doctor.userId} fullName={doctor.fullName} phone={doctor.phone} />
-        <hr className="border-border" />
-        <DoctorPhotoForm doctorId={doctor.id} photoUrl={doctor.photoUrl} />
-        <hr className="border-border" />
         <DoctorEditForm doctor={doctor} branches={branches} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>

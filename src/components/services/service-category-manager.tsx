@@ -1,14 +1,23 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Field } from "@/components/form/field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createCategoryAction, toggleCategoryActiveAction } from "@/features/service-categories/actions";
+import { createCategoryAction, deleteCategoryAction, toggleCategoryActiveAction } from "@/features/service-categories/actions";
 import type { ServiceCategory } from "@/features/service-categories/queries";
 import { idleState } from "@/lib/forms";
 
@@ -39,6 +48,38 @@ function AddCategoryForm() {
   );
 }
 
+function DeleteCategoryDialog({ category }: { category: ServiceCategory }) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction] = useActionState(deleteCategoryAction, idleState);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button type="button" variant="ghost" size="sm" />}>Delete</DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete {category.name}?</DialogTitle>
+          <DialogDescription>
+            Services in this category are not removed — they simply show as having no category, and you can
+            reassign them afterwards.
+          </DialogDescription>
+        </DialogHeader>
+        <FormAlert state={state} />
+        <form action={formAction}>
+          <input type="hidden" name="categoryId" value={category.id} />
+          <DialogFooter>
+            <Button type="button" variant="outline" size="touch" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <SubmitButton variant="destructive" pendingLabel="Deleting…" className="sm:w-auto">
+              Delete category
+            </SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ServiceCategoryManager({
   categories,
   pagination,
@@ -63,7 +104,10 @@ export function ServiceCategoryManager({
                   {category.name}
                   {!category.isActive ? <Badge variant="outline">Inactive</Badge> : null}
                 </span>
-                <ToggleActiveButton category={category} />
+                <span className="flex shrink-0 items-center gap-1">
+                  <ToggleActiveButton category={category} />
+                  <DeleteCategoryDialog category={category} />
+                </span>
               </li>
             ))}
           </ul>

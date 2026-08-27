@@ -54,3 +54,24 @@ export async function toggleCategoryActiveAction(_previous: FormState, formData:
   revalidatePath("/admin/services");
   return { status: "success", message: isActive ? "Category deactivated." : "Category reactivated." };
 }
+
+/**
+ * Removes a category. Services that used it fall back to "No category" rather
+ * than disappearing — services.category_id is ON DELETE SET NULL — so nothing
+ * bookable is lost by tidying the list up.
+ */
+export async function deleteCategoryAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const categoryId = text(formData, "categoryId");
+  if (!categoryId) return { status: "error", message: "We could not tell which category to delete." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("service_categories").delete().eq("id", categoryId);
+
+  if (error) {
+    return failure("service-categories", error, "We could not delete that category just now. Please try again.");
+  }
+
+  revalidatePath("/admin/services");
+  revalidatePath("/services");
+  return { status: "success", message: "Category deleted." };
+}

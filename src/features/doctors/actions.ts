@@ -10,6 +10,7 @@ import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { inviteDoctorSchema, updateDoctorProfileSchema } from "@/lib/validation/doctor";
+import { adminUpdateIdentitySchema } from "@/lib/validation/profile";
 
 /** A doctor uploads their own signature image, reused on every prescription after. */
 export async function updateSignatureAction(_previous: FormState, formData: FormData): Promise<FormState> {
@@ -118,11 +119,35 @@ export async function inviteDoctorAction(_previous: FormState, formData: FormDat
   return { status: "success", message: `Invitation sent to ${parsed.data.email}.` };
 }
 
+/**
+ * One save for the whole Edit dialog — the profile fields and the photo.
+ *
+ * The dialog used to hold three separate forms — name/phone, photo, and the
+ * profile fields — each with its own Save. An admin who filled in more than
+ * one and pressed a button lost the rest. This writes all three: the identity
+ * columns on public.users, and the doctor row.
+ *
+ * The photo is optional: leaving the picker alone keeps the current one rather
+ * than clearing it.
+ */
 export async function updateDoctorProfileAction(_previous: FormState, formData: FormData): Promise<FormState> {
   await requireRole("admin", "super_admin");
 
   const doctorId = text(formData, "doctorId");
   if (!doctorId) return { status: "error", message: "We could not tell which doctor to update." };
+
+  const photo = readDoctorPhoto(formData);
+  if (photo) {
+    const problem = describeDoctorPhotoProblem(photo);
+    if (problem) return { status: "error", message: problem, fieldErrors: { photo: [problem] } };
+  }
+
+  const identity = adminUpdateIdentitySchema.safeParse({
+    targetUserId: text(formData, "targetUserId"),
+    fullName: text(formData, "fullName"),
+    phone: text(formData, "phone") ?? null,
+  });
+  if (!identity.success) return invalid(identity.error);
 
   const parsed = updateDoctorProfileSchema.safeParse({
     primaryBranchId: text(formData, "primaryBranchId") ?? null,
@@ -134,10 +159,34 @@ export async function updateDoctorProfileAction(_previous: FormState, formData: 
   });
   if (!parsed.success) return invalid(parsed.error);
 
+  // Uploaded before the row is touched, so a storage failure leaves the
+  // profile as it was rather than half-saved.
+  let photoPath: string | undefined;
+  if (photo) {
+    const uploaded = await uploadDoctorPhoto(doctorId, photo);
+    if (!uploaded.ok) return { status: "error", message: "We could not upload that image. Please try again." };
+    photoPath = uploaded.path;
+  }
+
   const supabase = await createClient();
+
+  // users first: its own RLS (id = auth.uid() or is_admin_of_user(id)) is what
+  // authorizes the name and phone, and a failure there should stop the rest.
+  const { error: identityError } = await supabase
+    .from("users")
+    .update({ full_name: identity.data.fullName, phone: identity.data.phone })
+    .eq("id", identity.data.targetUserId)
+    .select("id")
+    .maybeSingle();
+
+  if (identityError) {
+    return failure("doctors", identityError, "We could not save this doctor's details just now. Please try again.");
+  }
+
   const { error } = await supabase
     .from("doctors")
     .update({
+      ...(photoPath === undefined ? {} : { photo_path: photoPath }),
       primary_branch_id: parsed.data.primaryBranchId,
       registration_number: parsed.data.registrationNumber,
       specialization: parsed.data.specialization,
@@ -206,38 +255,4 @@ export async function reactivateDoctorAction(_previous: FormState, formData: For
 
   revalidatePath("/admin/doctors");
   return { status: "success", message: "Doctor reactivated." };
-}
-
-/** Admin uploads a doctor's photo — shown on /admin/doctors and the public Doctors page. */
-export async function updateDoctorPhotoAction(_previous: FormState, formData: FormData): Promise<FormState> {
-  await requireRole("admin", "super_admin");
-
-  const doctorId = text(formData, "doctorId");
-  if (!doctorId) return { status: "error", message: "We could not tell which doctor this is for." };
-
-  const file = readDoctorPhoto(formData);
-  if (!file) {
-    return { status: "error", message: "Choose an image to upload.", fieldErrors: { photo: ["Required"] } };
-  }
-
-  const problem = describeDoctorPhotoProblem(file);
-  if (problem) {
-    return { status: "error", message: problem, fieldErrors: { photo: [problem] } };
-  }
-
-  const uploaded = await uploadDoctorPhoto(doctorId, file);
-  if (!uploaded.ok) {
-    return { status: "error", message: "We could not upload that image. Please try again." };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.from("doctors").update({ photo_path: uploaded.path }).eq("id", doctorId);
-
-  if (error) {
-    return failure("doctors", error, "We could not save that photo just now. Please try again.");
-  }
-
-  revalidatePath("/admin/doctors");
-  revalidatePath("/doctors");
-  return { status: "success", message: "Photo updated." };
 }

@@ -99,3 +99,52 @@ export async function toggleServiceActiveAction(_previous: FormState, formData: 
   revalidatePath("/admin/services");
   return { status: "success", message: isActive ? "Service deactivated." : "Service reactivated." };
 }
+
+/**
+ * Removes a service outright.
+ *
+ * Only ever when nothing has been booked against it. appointments.service_id
+ * is ON DELETE RESTRICT, so the database would refuse anyway — this checks
+ * first so an admin gets a sentence explaining why rather than a constraint
+ * error, and is pointed at Deactivate, which is what they want for a service
+ * the practice has stopped offering. Deleting is for the one added by mistake.
+ *
+ * Invoice lines are unaffected either way: invoice_items.service_id is
+ * ON DELETE SET NULL and the line keeps its own copied description and price,
+ * so billing history stays intact (CLAUDE.md §6).
+ */
+export async function deleteServiceAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const serviceId = text(formData, "serviceId");
+  if (!serviceId) return { status: "error", message: "We could not tell which service to delete." };
+
+  const supabase = await createClient();
+
+  const { count, error: countError } = await supabase
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("service_id", serviceId);
+
+  if (countError) {
+    return failure("services", countError, "We could not check that service just now. Please try again.");
+  }
+
+  if ((count ?? 0) > 0) {
+    return {
+      status: "error",
+      message:
+        count === 1
+          ? "This service is used by an appointment, so it cannot be deleted. Deactivate it instead — it stays on past records and stops being bookable."
+          : `This service is used by ${count} appointments, so it cannot be deleted. Deactivate it instead — it stays on past records and stops being bookable.`,
+    };
+  }
+
+  const { error } = await supabase.from("services").delete().eq("id", serviceId);
+
+  if (error) {
+    return failure("services", error, "We could not delete that service just now. Please try again.");
+  }
+
+  revalidatePath("/admin/services");
+  revalidatePath("/services");
+  return { status: "success", message: "Service deleted." };
+}

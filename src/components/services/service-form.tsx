@@ -9,7 +9,16 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { TextAreaField } from "@/components/form/textarea-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createServiceAction, toggleServiceActiveAction, updateServiceAction } from "@/features/services/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { createServiceAction, deleteServiceAction, toggleServiceActiveAction, updateServiceAction } from "@/features/services/actions";
 import type { ServiceSummary } from "@/features/services/queries";
 import type { ServiceCategory } from "@/features/service-categories/queries";
 import { paisaToTaaka } from "@/lib/currency";
@@ -124,6 +133,38 @@ function ToggleActiveButton({ service }: { service: ServiceSummary }) {
   );
 }
 
+function DeleteServiceDialog({ service }: { service: ServiceSummary }) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction] = useActionState(deleteServiceAction, idleState);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button type="button" variant="ghost" size="sm" />}>Delete</DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete {service.name}?</DialogTitle>
+          <DialogDescription>
+            This removes it from the catalog for good. A service that has ever been booked cannot be deleted —
+            deactivate it instead, and it stays on past records while disappearing from booking.
+          </DialogDescription>
+        </DialogHeader>
+        <FormAlert state={state} />
+        <form action={formAction}>
+          <input type="hidden" name="serviceId" value={service.id} />
+          <DialogFooter>
+            <Button type="button" variant="outline" size="touch" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <SubmitButton variant="destructive" pendingLabel="Deleting…" className="sm:w-auto">
+              Delete service
+            </SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ServiceRow({ service, categories }: { service: ServiceSummary; categories: ServiceCategory[] }) {
   const [editing, setEditing] = useState(false);
   const [state, formAction] = useActionState(updateServiceAction, idleState);
@@ -149,6 +190,7 @@ function ServiceRow({ service, categories }: { service: ServiceSummary; categori
               Edit
             </Button>
             <ToggleActiveButton service={service} />
+            <DeleteServiceDialog service={service} />
           </div>
         </div>
       </li>
