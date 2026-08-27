@@ -11,6 +11,8 @@ type TextAreaFieldProps = {
   required?: boolean;
   /** For a step of a larger flow that needs the value outside this component. */
   onChange?: (value: string) => void;
+  /** Override when two forms on one page share a field name. */
+  id?: string;
 };
 
 /** The Field counterpart for a longer, free-text answer. */
@@ -23,16 +25,20 @@ export function TextAreaField({
   errors,
   required,
   onChange,
+  id,
 }: TextAreaFieldProps) {
-  const errorId = `${name}-error`;
-  const hintId = `${name}-hint`;
+  // See Field: defaults to the field name, overridden where two forms on one
+  // page share one.
+  const inputId = id ?? name;
+  const errorId = `${inputId}-error`;
+  const hintId = `${inputId}-hint`;
   const hasError = Boolean(errors?.length);
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={inputId}>{label}</Label>
       <textarea
-        id={name}
+        id={inputId}
         name={name}
         rows={rows}
         defaultValue={defaultValue}

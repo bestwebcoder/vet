@@ -16,16 +16,21 @@ type FieldProps = ComponentProps<typeof Input> & {
  * reports problems the same way and stays accessible without each screen
  * remembering to wire aria attributes.
  */
-export function Field({ label, name, errors, hint, className, ...props }: FieldProps) {
-  const errorId = `${name}-error`;
-  const hintId = `${name}-hint`;
+export function Field({ label, name, errors, hint, className, id, ...props }: FieldProps) {
+  // Defaults to the field name, which is unique on almost every screen. Pass
+  // `id` where two forms on one page share a field name — Settings has both a
+  // practice "name" and a branch "name", and without this the label pointed at
+  // whichever input the browser found first.
+  const inputId = id ?? name;
+  const errorId = `${inputId}-error`;
+  const hintId = `${inputId}-hint`;
   const hasError = Boolean(errors?.length);
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={inputId}>{label}</Label>
       <Input
-        id={name}
+        id={inputId}
         name={name}
         aria-invalid={hasError || undefined}
         aria-describedby={cn(hasError && errorId, hint && hintId) || undefined}

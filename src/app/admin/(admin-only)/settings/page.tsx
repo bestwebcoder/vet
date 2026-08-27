@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 
+import { BranchManager } from "@/components/branches/branch-manager";
 import { HeroImageForm } from "@/components/organizations/hero-image-form";
 import { LogoImageForm } from "@/components/organizations/logo-image-form";
 import { SettingsForm } from "@/components/organizations/settings-form";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
+import { listBranchesForAdmin } from "@/features/branches/queries";
 import { getOrganizationHeroImages, getOwnOrganization } from "@/features/organizations/queries";
 
 export const metadata: Metadata = { title: "Settings · TV Care" };
@@ -23,9 +25,10 @@ export default async function AdminSettingsPage() {
     );
   }
 
-  const [organization, heroImages] = await Promise.all([
+  const [organization, heroImages, branches] = await Promise.all([
     getOwnOrganization(organizationId),
     getOrganizationHeroImages(organizationId),
+    listBranchesForAdmin(organizationId),
   ]);
 
   return (
@@ -44,6 +47,7 @@ export default async function AdminSettingsPage() {
       ) : (
         <>
           <SettingsForm organization={organization.data} />
+          <BranchManager branches={branches.status === "ok" ? branches.data : []} />
           <LogoImageForm logoUrl={organization.data.logoUrl} footerShowLogo={organization.data.footerShowLogo} />
           <HeroImageForm heroImages={heroImages.status === "ok" ? heroImages.data : []} />
         </>
