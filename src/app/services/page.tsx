@@ -8,6 +8,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionCards } from "@/components/marketing/section-cards";
+import { Pagination } from "@/components/search/pagination";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
 import { getPublicPageSectionItems, type PageSectionItems } from "@/features/page-sections/queries";
 import { getPublicServices, type ServiceSummary } from "@/features/services/queries";
@@ -16,26 +17,63 @@ import { getPublicSiteContent } from "@/features/site-content/queries";
 
 export const metadata: Metadata = { title: "Services · TV Care" };
 
-function groupByCategory(services: ServiceSummary[]) {
-  const groups = new Map<string, ServiceSummary[]>();
+/** Three per row on a wide screen, four rows deep. */
+const PAGE_SIZE = 12;
 
-  for (const service of services) {
-    const key = service.categoryName ?? "Other";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(service);
+/**
+ * Sorted so a page can be cut anywhere and still read as grouped: category
+ * first, then the practice's own sort_order within it, which is the order the
+ * query already returns and the order an admin arranged on the Services screen.
+ */
+function byCategoryThenOrder(a: ServiceSummary, b: ServiceSummary) {
+  const groupA = a.categoryName ?? "Other";
+  const groupB = b.categoryName ?? "Other";
+
+  // "Other" last: it is where anything uncategorised falls, not a heading the
+  // practice chose.
+  if (groupA !== groupB) {
+    if (groupA === "Other") return 1;
+    if (groupB === "Other") return -1;
+    return groupA.localeCompare(groupB);
   }
 
-  return [...groups.entries()];
+  return 0;
 }
 
-export default async function ServicesPage() {
-  const [organization, servicesResult] = await Promise.all([getPublicOrganizationInfo(), getPublicServices()]);
+/** Consecutive services sharing a category, as they fall on this page. */
+function intoGroups(services: ServiceSummary[]) {
+  const groups: { heading: string; services: ServiceSummary[] }[] = [];
+
+  for (const service of services) {
+    const heading = service.categoryName ?? "Other";
+    const last = groups.at(-1);
+    if (last?.heading === heading) last.services.push(service);
+    else groups.push({ heading, services: [service] });
+  }
+
+  return groups;
+}
+
+export default async function ServicesPage({ searchParams }: PageProps<"/services">) {
+  const organization = await getPublicOrganizationInfo();
+  const servicesResult = await getPublicServices(organization?.id);
   const practiceName = organization?.name ?? "The Traveling Vet";
   const [content, sections] = await Promise.all([
     organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
     organization ? getPublicPageSectionItems(organization.id, "services") : Promise.resolve<PageSectionItems>({}),
   ]);
   const highlights = sections.highlights ?? [];
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
+
+  const services = servicesResult.status === "ok" ? [...servicesResult.data].sort(byCategoryThenOrder) : [];
+
+  // A page past the end shows the last one rather than an empty grid.
+  const totalPages = Math.max(1, Math.ceil(services.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const groups = intoGroups(services.slice(start, start + PAGE_SIZE));
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -66,7 +104,7 @@ export default async function ServicesPage() {
           <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
             {servicesResult.status === "error" ? (
               <ErrorState title="Services could not be loaded" />
-            ) : servicesResult.data.length === 0 ? (
+            ) : services.length === 0 ? (
               <EmptyState
                 icon={ClipboardList}
                 title="No services listed yet"
@@ -74,11 +112,14 @@ export default async function ServicesPage() {
               />
             ) : (
               <div className="grid gap-10">
-                {groupByCategory(servicesResult.data).map(([category, services]) => (
-                  <div key={category} className="grid gap-4">
-                    <h2 className="text-xl font-semibold tracking-tight">{category}</h2>
+                {groups.map((group) => (
+                  <div key={group.heading} className="grid gap-4">
+                    <div className="flex items-baseline gap-3">
+                      <h2 className="text-xl font-semibold tracking-tight">{group.heading}</h2>
+                      <span className="text-muted-foreground text-sm tabular-nums">{group.services.length}</span>
+                    </div>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {services.map((service) => (
+                      {group.services.map((service) => (
                         <Card key={service.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
                           <CardContent className="grid gap-2">
                             <div className="flex items-start justify-between gap-2">
@@ -105,6 +146,14 @@ export default async function ServicesPage() {
                     </div>
                   </div>
                 ))}
+
+                <Pagination
+                  basePath="/services"
+                  searchParams={{}}
+                  page={currentPage}
+                  pageSize={PAGE_SIZE}
+                  totalCount={services.length}
+                />
               </div>
             )}
           </div>

@@ -156,16 +156,30 @@ export async function getService(serviceId: string): Promise<Result<ServiceSumma
  * The home-visit fee is a billing surcharge, not a browsable service, so
  * it's excluded here the same way it's excluded from booking's service list.
  */
-export async function getPublicServices(): Promise<Result<ServiceSummary[]>> {
+/**
+ * The services shown on the public site.
+ *
+ * Scoped to the practice, which it was not. This goes through the service role
+ * because the public pages are reached before any session exists and row level
+ * security cannot scope them — and without an organization_id filter that
+ * meant every practice in the database. Measured here: 1,578 services across
+ * 201 organizations listed on the price list of a practice with 122 of its
+ * own. Same fault as getPublicDoctors had.
+ */
+export async function getPublicServices(organizationId?: string): Promise<Result<ServiceSummary[]>> {
   const supabase = createServiceClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("services")
     .select(SERVICE_COLUMNS)
     .eq("is_active", true)
     .eq("is_home_visit_fee", false)
     .is("deleted_at", null)
     .order("sort_order");
+
+  if (organizationId) query = query.eq("organization_id", organizationId);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[services] public list failed", error);
