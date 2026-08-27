@@ -193,16 +193,30 @@ export type PublicDoctor = {
  * or anything clinical. The photo is optional — admin-uploaded from
  * /admin/doctors — and falls back to an icon avatar when not set.
  */
-export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
+/**
+ * The doctors shown on the public site.
+ *
+ * Scoped to the practice, which it was not: this runs through the service
+ * role — the public site is reached before any session exists, so row level
+ * security cannot scope it — and without an organization_id filter that meant
+ * every practice in the database. On this one it listed 507 doctors across 60
+ * organizations for a practice with 432 of its own, putting other practices'
+ * staff on the marketing page.
+ */
+export async function getPublicDoctors(organizationId?: string): Promise<Result<PublicDoctor[]>> {
   const supabase = createServiceClient();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("doctors")
     .select(
       "id, specialization, qualifications, bio, photo_path, updated_at, is_lead_doctor, user:user_id (full_name), branch:primary_branch_id (name)",
     )
     .is("deleted_at", null)
     .order("id");
+
+  if (organizationId) query = query.eq("organization_id", organizationId);
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[doctors] public list failed", error);
@@ -229,8 +243,8 @@ export async function getPublicDoctors(): Promise<Result<PublicDoctor[]>> {
 }
 
 /** The featured "Meet our lead doctor" section on the Home/About page — at most one, enforced by a partial unique index. */
-export async function getPublicLeadDoctor(): Promise<PublicDoctor | null> {
-  const result = await getPublicDoctors();
+export async function getPublicLeadDoctor(organizationId?: string): Promise<PublicDoctor | null> {
+  const result = await getPublicDoctors(organizationId);
   if (result.status === "error") return null;
   return result.data.find((doctor) => doctor.isLeadDoctor) ?? null;
 }

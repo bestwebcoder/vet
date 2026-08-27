@@ -27,10 +27,18 @@ import { cn } from "@/lib/utils";
 export function DoctorCard({
   doctor,
   showViewFullTeamLink = false,
+  compact = false,
 }: {
   doctor: PublicDoctor;
   /** Only makes sense linking away from this list to the full roster — omit on /doctors itself. */
   showViewFullTeamLink?: boolean;
+  /**
+   * Smaller tile, for the full roster on /doctors: a square crop instead of
+   * the home page's 4:5 portrait, so a practice with a long list of doctors
+   * fits more of them on screen at once. The home page shows a handful as a
+   * feature, and keeps the taller frame.
+   */
+  compact?: boolean;
 }) {
   return (
     <Dialog>
@@ -42,7 +50,7 @@ export function DoctorCard({
           />
         }
       >
-        <div className="relative aspect-4/5 overflow-hidden rounded-2xl">
+        <div className={compact ? "relative aspect-square overflow-hidden rounded-xl" : "relative aspect-4/5 overflow-hidden rounded-2xl"}>
           {doctor.photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- an admin-uploaded, arbitrary-dimension public image; no build-time optimization to gain here.
             <img
@@ -56,8 +64,8 @@ export function DoctorCard({
             </span>
           )}
         </div>
-        <p className="mt-3 font-medium group-hover:underline">{doctor.fullName}</p>
-        {doctor.specialization ? <p className="text-muted-foreground text-sm">{doctor.specialization}</p> : null}
+        <p className={compact ? "mt-2 text-sm font-medium group-hover:underline" : "mt-3 font-medium group-hover:underline"}>{doctor.fullName}</p>
+        {doctor.specialization ? <p className={compact ? "text-muted-foreground text-xs" : "text-muted-foreground text-sm"}>{doctor.specialization}</p> : null}
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-md">

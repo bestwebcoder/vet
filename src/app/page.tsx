@@ -27,7 +27,8 @@ export default async function RootPage() {
   const home = user ? homeHrefFor(user) : null;
 
   if (!user || home) {
-    const [organization, doctorsResult] = await Promise.all([getPublicOrganizationInfo(), getPublicDoctors()]);
+    const organization = await getPublicOrganizationInfo();
+  const doctorsResult = await getPublicDoctors(organization?.id);
     const [content, homeSections] = await Promise.all([
       organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
       organization
