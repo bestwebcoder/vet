@@ -102,3 +102,54 @@ export async function listPaymentsForOrg(options: {
 
   return { status: "ok", data: (data ?? []).map(toPayment), totalCount: count ?? 0, page, pageSize };
 }
+
+/**
+ * Refunds. Read alongside payments so a payment row can show what has already
+ * gone back against it and what is still refundable.
+ */
+export type Refund = {
+  id: string;
+  paymentId: string;
+  invoiceId: string;
+  amountPaisa: number;
+  amount: string;
+  method: PaymentInput["method"];
+  reason: string;
+  referenceNumber: string | null;
+  refundedAt: string;
+};
+
+const REFUND_COLUMNS = "id, payment_id, invoice_id, amount_paisa, method, reason, reference_number, refunded_at";
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- shaped by REFUND_COLUMNS */
+function toRefund(row: any): Refund {
+  return {
+    id: row.id,
+    paymentId: row.payment_id,
+    invoiceId: row.invoice_id,
+    amountPaisa: row.amount_paisa,
+    amount: formatCurrency(row.amount_paisa),
+    method: row.method,
+    reason: row.reason,
+    referenceNumber: row.reference_number,
+    refundedAt: row.refunded_at,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+export async function listRefundsForInvoice(invoiceId: string): Promise<Result<Refund[]>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("refunds")
+    .select(REFUND_COLUMNS)
+    .eq("invoice_id", invoiceId)
+    .order("refunded_at", { ascending: false });
+
+  if (error) {
+    console.error("[payments] refunds for invoice failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (data ?? []).map(toRefund) };
+}

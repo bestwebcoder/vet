@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { InvoiceDetail as InvoiceDetailData, InvoiceStatus } from "@/features/invoices/queries";
-import type { Payment } from "@/features/payments/queries";
+import type { Payment, Refund } from "@/features/payments/queries";
 import type { ServiceSummary } from "@/features/services/queries";
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -36,16 +36,22 @@ export function InvoiceDetailView({
   invoice,
   services,
   payments,
+  refunds,
   pdfUrl,
   canEdit,
 }: {
   invoice: InvoiceDetailData;
   services: ServiceSummary[];
   payments: Payment[];
+  refunds: Refund[];
   pdfUrl: string | null;
   canEdit: boolean;
 }) {
   const canRecordPayment = canEdit && (invoice.status === "issued" || invoice.status === "partially_paid");
+  // Not the same condition as taking a payment, and getting them confused hides
+  // the button exactly where it is needed: a fully *paid* invoice cannot take
+  // another payment, and is the one most likely to be refunded.
+  const canRefund = canEdit && invoice.status !== "draft" && invoice.status !== "cancelled";
   const canCancel = canEdit && invoice.status !== "paid" && invoice.status !== "cancelled" && invoice.status !== "refunded";
 
   return (
@@ -110,7 +116,13 @@ export function InvoiceDetailView({
 
       {canEdit && invoice.status === "draft" ? <IssueInvoiceButton invoiceId={invoice.id} /> : null}
 
-      {invoice.status !== "draft" ? <RecordPaymentForm invoiceId={invoice.id} payments={payments} canEdit={canRecordPayment} /> : null}
+      {invoice.status !== "draft" ? <RecordPaymentForm
+          invoiceId={invoice.id}
+          payments={payments}
+          refunds={refunds}
+          canRecordPayment={canRecordPayment}
+          canRefund={canRefund}
+        /> : null}
 
       {canCancel ? <CancelInvoiceButton invoiceId={invoice.id} /> : null}
     </div>

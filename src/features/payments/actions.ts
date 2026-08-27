@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { getSessionUser } from "@/features/auth/session";
+import { formatCurrency } from "@/lib/currency";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
-import { paymentSchema } from "@/lib/validation/payment";
+import { paymentSchema, refundSchema } from "@/lib/validation/payment";
 
 /**
  * Payment recording. `is_billing_manager` is enforced by row level
@@ -75,4 +76,82 @@ export async function recordPaymentAction(_previous: FormState, formData: FormDa
   revalidatePath("/client/invoices");
 
   return { status: "success", message: "Payment recorded." };
+}
+
+/**
+ * Records a refund against one payment.
+ *
+ * Never edits the payment. What was taken and what was given back are separate
+ * rows, so an invoice that was paid and then refunded still shows both, with
+ * who did each and why (CLAUDE.md §6).
+ *
+ * The over-refund check here is for the message, not the guarantee: the
+ * refunds_guard_amount trigger refuses it regardless, and would do so even if
+ * this ran against stale numbers between the read and the insert.
+ */
+export async function recordRefundAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  const paymentId = text(formData, "paymentId");
+  if (!paymentId) return { status: "error", message: "We could not tell which payment to refund." };
+
+  const parsed = refundSchema.safeParse({
+    amountPaisa: text(formData, "amountPaisa") ?? "",
+    method: text(formData, "method") ?? "",
+    reason: text(formData, "reason") ?? "",
+    referenceNumber: text(formData, "referenceNumber") ?? "",
+  });
+  if (!parsed.success) return invalid(parsed.error);
+
+  const supabase = await createClient();
+
+  const { data: payment, error: paymentError } = await supabase
+    .from("payments")
+    .select("id, invoice_id, organization_id, amount_paisa, status")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (paymentError || !payment) {
+    return { status: "error", message: "That payment could not be found." };
+  }
+
+  if (payment.status !== "completed") {
+    return { status: "error", message: "Only a completed payment can be refunded." };
+  }
+
+  const { data: existing } = await supabase.from("refunds").select("amount_paisa").eq("payment_id", paymentId);
+  const alreadyRefunded = (existing ?? []).reduce((total, row) => total + row.amount_paisa, 0);
+  const refundable = payment.amount_paisa - alreadyRefunded;
+
+  if (parsed.data.amountPaisa > refundable) {
+    return {
+      status: "error",
+      message:
+        refundable > 0
+          ? `Refund failed: only ${formatCurrency(refundable)} of this payment is left to refund.`
+          : "Refund failed: this payment has already been refunded in full.",
+      fieldErrors: { amountPaisa: ["More than is left"] },
+    };
+  }
+
+  const user = await getSessionUser();
+
+  const { error } = await supabase.from("refunds").insert({
+    payment_id: paymentId,
+    invoice_id: payment.invoice_id,
+    organization_id: payment.organization_id,
+    amount_paisa: parsed.data.amountPaisa,
+    method: parsed.data.method,
+    reason: parsed.data.reason,
+    reference_number: parsed.data.referenceNumber,
+    recorded_by: user?.id ?? null,
+  });
+
+  if (error) {
+    return failure("payments", error, "We could not record that refund just now. Please try again.");
+  }
+
+  revalidatePath(`/admin/invoices/${payment.invoice_id}`);
+  revalidatePath(`/doctor/invoices/${payment.invoice_id}`);
+  revalidatePath("/admin/billing");
+  revalidatePath("/admin/payments");
+  return { status: "success", message: "Refund recorded." };
 }

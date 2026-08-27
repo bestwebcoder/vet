@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { getOwnDoctorRecord } from "@/features/doctors/queries";
 import { getInvoice, signedInvoicePdfUrl } from "@/features/invoices/queries";
-import { listPaymentsForInvoice } from "@/features/payments/queries";
+import { listPaymentsForInvoice, listRefundsForInvoice } from "@/features/payments/queries";
 import { listServices } from "@/features/services/queries";
 
 export const metadata: Metadata = { title: "Invoice · TV Care" };
@@ -35,9 +35,10 @@ export default async function DoctorInvoiceDetailPage({ params }: PageProps<"/do
   const doctor = await getOwnDoctorRecord();
   const canEdit = doctor.status === "ok" && doctor.data?.canManageBilling === true;
 
-  const [servicesResult, paymentsResult, pdfUrl] = await Promise.all([
+  const [servicesResult, paymentsResult, refundsResult, pdfUrl] = await Promise.all([
     listServices(),
     listPaymentsForInvoice(invoiceId),
+    listRefundsForInvoice(invoiceId),
     signedInvoicePdfUrl(invoice.pdfPath),
   ]);
 
@@ -65,6 +66,7 @@ export default async function DoctorInvoiceDetailPage({ params }: PageProps<"/do
         invoice={invoice}
         services={servicesResult.status === "ok" ? servicesResult.data : []}
         payments={paymentsResult.status === "ok" ? paymentsResult.data : []}
+        refunds={refundsResult.status === "ok" ? refundsResult.data : []}
         pdfUrl={pdfUrl}
         canEdit={canEdit}
       />

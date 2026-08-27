@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ACCESS } from "@/features/auth/access";
 import { requireRole } from "@/features/auth/session";
 import { getInvoice, signedInvoicePdfUrl } from "@/features/invoices/queries";
-import { listPaymentsForInvoice } from "@/features/payments/queries";
+import { listPaymentsForInvoice, listRefundsForInvoice } from "@/features/payments/queries";
 import { listServices } from "@/features/services/queries";
 
 export const metadata: Metadata = { title: "Invoice · TV Care" };
@@ -30,9 +30,10 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps<"/adm
   if (!result.data) notFound();
 
   const invoice = result.data;
-  const [servicesResult, paymentsResult, pdfUrl] = await Promise.all([
+  const [servicesResult, paymentsResult, refundsResult, pdfUrl] = await Promise.all([
     listServices(),
     listPaymentsForInvoice(invoiceId),
+    listRefundsForInvoice(invoiceId),
     signedInvoicePdfUrl(invoice.pdfPath),
   ]);
 
@@ -47,6 +48,7 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps<"/adm
         invoice={invoice}
         services={servicesResult.status === "ok" ? servicesResult.data : []}
         payments={paymentsResult.status === "ok" ? paymentsResult.data : []}
+        refunds={refundsResult.status === "ok" ? refundsResult.data : []}
         pdfUrl={pdfUrl}
         canEdit
       />
