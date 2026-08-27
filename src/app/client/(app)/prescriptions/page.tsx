@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { Download, FileText, Printer } from "lucide-react";
 import type { Metadata } from "next";
 
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,8 +14,14 @@ import { listPrescriptionsForPet, signedPrescriptionPdfUrl } from "@/features/pr
 
 export const metadata: Metadata = { title: "Prescriptions · TV Care" };
 
-export default async function ClientPrescriptionsPage() {
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
+
+export default async function ClientPrescriptionsPage({ searchParams }: PageProps<"/client/prescriptions">) {
   await requireRole("client");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
 
   const client = await getOwnClientRecord();
 
@@ -58,13 +65,22 @@ export default async function ClientPrescriptionsPage() {
     ),
   );
 
+  const total = prescriptions.length;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = prescriptions.slice(start, start + PAGE_SIZE);
+
   return (
     <div className="grid gap-6">
       <h1>Prescriptions</h1>
 
       {prescriptions.length === 0 ? (
         <Card>
-          <CardContent>
+          <CardContent className="grid gap-4">
             <EmptyState
               icon={FileText}
               title="No prescriptions yet"
@@ -74,7 +90,7 @@ export default async function ClientPrescriptionsPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {prescriptions.map(({ pet, prescription }, index) => (
+          {visible.map(({ pet, prescription }, index) => (
             <Card key={prescription.id}>
               <CardContent className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -109,7 +125,14 @@ export default async function ClientPrescriptionsPage() {
                     </a>
                   </div>
                 ) : null}
-              </CardContent>
+                <Pagination
+            basePath="/client/prescriptions"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
+        </CardContent>
             </Card>
           ))}
         </div>

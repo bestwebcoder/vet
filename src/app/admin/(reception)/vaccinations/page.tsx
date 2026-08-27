@@ -38,8 +38,12 @@ export default async function AdminVaccinationsPage({ searchParams }: PageProps<
           .filter((row) => row.due.status === "due_today" || row.due.status === "overdue")
           .sort((a, b) => (a.due.daysUntil ?? 0) - (b.due.daysUntil ?? 0))
       : [];
-
-  const start = (page - 1) * PAGE_SIZE;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil((allDueToday.length) / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
   const dueToday = allDueToday.slice(start, start + PAGE_SIZE);
 
   return (
@@ -79,7 +83,7 @@ export default async function AdminVaccinationsPage({ searchParams }: PageProps<
               <Pagination
                 basePath="/admin/vaccinations"
                 searchParams={{}}
-                page={page}
+                page={currentPage}
                 pageSize={PAGE_SIZE}
                 totalCount={allDueToday.length}
               />

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { PatientList } from "@/components/pets/patient-list";
 import { SearchField } from "@/components/search/search-field";
+import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,12 +18,13 @@ export const metadata: Metadata = { title: "Patients · TV Care" };
 export default async function DoctorPatientsPage({ searchParams }: PageProps<"/doctor/patients">) {
   await requireRole("doctor");
 
-  const { q, show } = await searchParams;
+  const { q, show, page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
   const search = typeof q === "string" ? q : undefined;
   const includeInactive = show === "all";
 
   const [pets, clients] = await Promise.all([
-    listPets({ search, includeInactive }),
+    listPets({ search, includeInactive, page, pageSize: 25 }),
     listClients({ limit: 500 }),
   ]);
 
@@ -78,7 +80,7 @@ export default async function DoctorPatientsPage({ searchParams }: PageProps<"/d
       </div>
 
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {pets.status === "error" ? (
             <ErrorState title="Patients could not be loaded" />
           ) : (
@@ -89,6 +91,13 @@ export default async function DoctorPatientsPage({ searchParams }: PageProps<"/d
               search={search}
             />
           )}
+          <Pagination
+            basePath="/doctor/patients"
+            searchParams={{ q: typeof q === "string" ? q : undefined, show: typeof show === "string" ? show : undefined }}
+            page={pets.status === "ok" ? pets.page : page}
+            pageSize={pets.status === "ok" ? pets.pageSize : 25}
+            totalCount={pets.status === "ok" ? pets.totalCount : 0}
+          />
         </CardContent>
       </Card>
     </div>

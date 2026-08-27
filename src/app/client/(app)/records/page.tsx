@@ -3,6 +3,7 @@ import { ClipboardList } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,8 +14,14 @@ import { listSoapRecordsForPet } from "@/features/soap/queries";
 
 export const metadata: Metadata = { title: "Medical records · TV Care" };
 
-export default async function ClientRecordsPage() {
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
+
+export default async function ClientRecordsPage({ searchParams }: PageProps<"/client/records">) {
   await requireRole("client");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
 
   const client = await getOwnClientRecord();
 
@@ -52,12 +59,21 @@ export default async function ClientRecordsPage() {
     })
     .sort((a, b) => b.record.createdAt.localeCompare(a.record.createdAt));
 
+  const total = records.length;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = records.slice(start, start + PAGE_SIZE);
+
   return (
     <div className="grid gap-6">
       <h1>Medical records</h1>
 
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {records.length === 0 ? (
             <EmptyState
               icon={ClipboardList}
@@ -66,7 +82,7 @@ export default async function ClientRecordsPage() {
             />
           ) : (
             <ul className="divide-border grid divide-y">
-              {records.map(({ pet, record }) => (
+              {visible.map(({ pet, record }) => (
                 <li key={record.id}>
                   <Link
                     href={`/client/pets/${pet.id}/visits/${record.id}`}
@@ -86,6 +102,13 @@ export default async function ClientRecordsPage() {
               ))}
             </ul>
           )}
+          <Pagination
+            basePath="/client/records"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
         </CardContent>
       </Card>
     </div>

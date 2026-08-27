@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { Download, Printer, Receipt } from "lucide-react";
 import type { Metadata } from "next";
 
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,9 @@ import { getOwnClientRecord } from "@/features/clients/queries";
 import { listInvoicesForClient, signedInvoicePdfUrl, type InvoiceStatus } from "@/features/invoices/queries";
 
 export const metadata: Metadata = { title: "Invoices · TV Care" };
+
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
   draft: "Draft",
@@ -31,15 +35,18 @@ const STATUS_BADGE_VARIANT: Record<InvoiceStatus, "default" | "secondary" | "out
   refunded: "destructive",
 };
 
-export default async function ClientInvoicesPage() {
+export default async function ClientInvoicesPage({ searchParams }: PageProps<"/client/invoices">) {
   await requireRole("client");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   const client = await getOwnClientRecord();
 
   if (client.status === "error" || !client.data) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           <ErrorState
             title="We could not load your invoices"
             description="Your client record could not be found. Please contact your clinic."
@@ -62,6 +69,15 @@ export default async function ClientInvoicesPage() {
 
   const pdfLinks = await Promise.all(invoicesResult.data.map((invoice) => signedInvoicePdfUrl(invoice.pdfPath)));
 
+  const total = invoicesResult.status === "ok" ? invoicesResult.data.length : 0;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = invoicesResult.status === "ok" ? invoicesResult.data.slice(start, start + PAGE_SIZE) : [];
+
   return (
     <div className="grid gap-6">
       <h1>Invoices</h1>
@@ -74,7 +90,7 @@ export default async function ClientInvoicesPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {invoicesResult.data.map((invoice, index) => (
+          {visible.map((invoice, index) => (
             <Card key={invoice.id}>
               <CardContent className="grid gap-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -113,7 +129,15 @@ export default async function ClientInvoicesPage() {
                     </a>
                   </div>
                 ) : null}
-              </CardContent>
+              
+          <Pagination
+            basePath="/client/invoices"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
+        </CardContent>
             </Card>
           ))}
         </div>

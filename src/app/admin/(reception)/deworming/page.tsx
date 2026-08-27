@@ -31,8 +31,12 @@ export default async function AdminDewormingPage({ searchParams }: PageProps<"/a
           .filter((row) => ["due_in_7", "due_today", "overdue"].includes(row.due.status))
           .sort((a, b) => (a.due.daysUntil ?? 0) - (b.due.daysUntil ?? 0))
       : [];
-
-  const start = (page - 1) * PAGE_SIZE;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil((allDueThisWeek.length) / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
   const dueThisWeek = allDueThisWeek.slice(start, start + PAGE_SIZE);
 
   return (
@@ -69,7 +73,7 @@ export default async function AdminDewormingPage({ searchParams }: PageProps<"/a
               <Pagination
                 basePath="/admin/deworming"
                 searchParams={{}}
-                page={page}
+                page={currentPage}
                 pageSize={PAGE_SIZE}
                 totalCount={allDueThisWeek.length}
               />

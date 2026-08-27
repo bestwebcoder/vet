@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PetCard } from "@/components/pets/pet-card";
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,8 +15,14 @@ import { listPetVaccinationStatuses } from "@/features/vaccinations/queries";
 
 export const metadata: Metadata = { title: "My pets · TV Care" };
 
-export default async function ClientPetsPage() {
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
+
+export default async function ClientPetsPage({ searchParams }: PageProps<"/client/pets">) {
   await requireRole("client");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
   const result = await listPets();
 
   const petIds = result.status === "ok" ? result.data.map((pet) => pet.id) : [];
@@ -32,6 +39,15 @@ export default async function ClientPetsPage() {
   const dewormingByPet = new Map(
     (dewormingResult.status === "ok" ? dewormingResult.data : []).map((row) => [row.petId, row]),
   );
+
+  const total = result.status === "ok" ? result.data.length : 0;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = result.status === "ok" ? result.data.slice(start, start + PAGE_SIZE) : [];
 
   return (
     <div className="grid gap-6">
@@ -61,7 +77,7 @@ export default async function ClientPetsPage() {
         </Card>
       ) : result.data.length === 0 ? (
         <Card>
-          <CardContent>
+          <CardContent className="grid gap-4">
             <EmptyState
               icon={PawPrint}
               title="No pets yet"
@@ -75,11 +91,18 @@ export default async function ClientPetsPage() {
                 </Link>
               }
             />
-          </CardContent>
+            <Pagination
+            basePath="/client/pets"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
+        </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {result.data.map((pet, index) => (
+          {visible.map((pet, index) => (
             <PetCard
               key={pet.id}
               pet={pet}

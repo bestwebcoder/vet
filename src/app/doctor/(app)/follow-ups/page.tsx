@@ -3,6 +3,7 @@ import { CalendarPlus, History } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,15 +15,21 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Follow-ups due · TV Care" };
 
-export default async function DoctorFollowUpsPage() {
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
+
+export default async function DoctorFollowUpsPage({ searchParams }: PageProps<"/doctor/follow-ups">) {
   await requireRole("doctor");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
 
   const doctor = await getOwnDoctorRecord();
 
   if (doctor.status === "error" || !doctor.data) {
     return (
       <Card>
-        <CardContent>
+        <CardContent className="grid gap-4">
           <ErrorState
             title="We could not load your follow-ups"
             description="Your doctor record could not be found. Please contact your administrator."
@@ -33,6 +40,15 @@ export default async function DoctorFollowUpsPage() {
   }
 
   const dueResult = await listFollowUpsDueForDoctor(doctor.data.id);
+
+  const total = dueResult.status === "ok" ? dueResult.data.length : 0;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = dueResult.status === "ok" ? dueResult.data.slice(start, start + PAGE_SIZE) : [];
 
   return (
     <div className="grid gap-6">
@@ -55,7 +71,7 @@ export default async function DoctorFollowUpsPage() {
             />
           ) : (
             <ul className="divide-border grid divide-y">
-              {dueResult.data.map((record) => (
+              {visible.map((record) => (
                 <li key={record.id} className={cn("flex flex-wrap items-center justify-between gap-3 py-3")}>
                   <div className="grid gap-0.5">
                     <span className="text-sm font-medium">{record.petName}</span>
@@ -77,6 +93,14 @@ export default async function DoctorFollowUpsPage() {
               ))}
             </ul>
           )}
+        
+          <Pagination
+            basePath="/doctor/follow-ups"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
         </CardContent>
       </Card>
     </div>

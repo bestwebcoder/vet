@@ -2,6 +2,7 @@ import { ChevronRight, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Pagination } from "@/components/search/pagination";
 import { SitePagesList } from "@/components/site-pages/site-pages-list";
 import { ErrorState } from "@/components/states/error-state";
 import { buttonVariants } from "@/components/ui/button";
@@ -13,7 +14,10 @@ import { PAGE_SECTIONS } from "@/lib/page-sections";
 
 export const metadata: Metadata = { title: "Website · TV Care" };
 
-export default async function AdminWebsitePage() {
+/** Pages of your own are unbounded; the five fixed ones above never are. */
+const PAGE_SIZE = 20;
+
+export default async function AdminWebsitePage({ searchParams }: PageProps<"/admin/website">) {
   const user = await requireRole("admin", "super_admin");
   const organizationId = user.organizationIds[0];
 
@@ -26,10 +30,21 @@ export default async function AdminWebsitePage() {
     );
   }
 
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
+
   const [sitePages, sectionCounts] = await Promise.all([
     listSitePagesForAdmin(organizationId),
     countPageSectionItemsForAdmin(organizationId),
   ]);
+
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const customPageCount = sitePages.status === "ok" ? sitePages.data.length : 0;
+  const totalPages = Math.max(1, Math.ceil(customPageCount / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
 
   return (
     <div className="grid gap-6">
@@ -100,9 +115,18 @@ export default async function AdminWebsitePage() {
             New page
           </Link>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
           {sitePages.status === "ok" ? (
-            <SitePagesList pages={sitePages.data} />
+            <>
+              <SitePagesList pages={sitePages.data.slice(start, start + PAGE_SIZE)} />
+              <Pagination
+                basePath="/admin/website"
+                searchParams={{}}
+                page={currentPage}
+                pageSize={PAGE_SIZE}
+                totalCount={customPageCount}
+              />
+            </>
           ) : (
             <ErrorState title="Custom pages could not be loaded" />
           )}

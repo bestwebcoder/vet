@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { Worm } from "lucide-react";
 import type { Metadata } from "next";
 
+import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +15,14 @@ import { dueStatusBadgeVariant, getDueInfo } from "@/lib/due-window";
 
 export const metadata: Metadata = { title: "Deworming · TV Care" };
 
-export default async function ClientDewormingPage() {
+/** Long enough to scan, short enough to render on a phone. */
+const PAGE_SIZE = 25;
+
+export default async function ClientDewormingPage({ searchParams }: PageProps<"/client/deworming">) {
   await requireRole("client");
+
+  const { page: pageParam } = await searchParams;
+  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
 
   const client = await getOwnClientRecord();
 
@@ -53,19 +60,28 @@ export default async function ClientDewormingPage() {
     })
     .sort((a, b) => b.record.dateAdministered.localeCompare(a.record.dateAdministered));
 
+  const total = records.length;
+  // A page beyond the end is clamped to the last one rather than rendered
+  // blank: with a single page of results the control hides itself, so an
+  // out-of-range ?page would otherwise be a dead end with no way back.
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const visible = records.slice(start, start + PAGE_SIZE);
+
   return (
     <div className="grid gap-6">
       <h1>Deworming</h1>
 
       {records.length === 0 ? (
         <Card>
-          <CardContent>
+          <CardContent className="grid gap-4">
             <EmptyState icon={Worm} title="No deworming yet" description="Deworming recorded for your pets will appear here." />
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4">
-          {records.map(({ pet, record }) => {
+          {visible.map(({ pet, record }) => {
             const due = getDueInfo(record.nextDueDate);
             return (
               <Card key={record.id}>
@@ -79,7 +95,14 @@ export default async function ClientDewormingPage() {
                   <p className="text-muted-foreground text-sm" data-numeric>
                     Given {format(new Date(`${record.dateAdministered}T00:00:00`), "d MMM yyyy")}
                   </p>
-                </CardContent>
+                  <Pagination
+            basePath="/client/deworming"
+            searchParams={{}}
+            page={currentPage}
+            pageSize={PAGE_SIZE}
+            totalCount={total}
+          />
+        </CardContent>
               </Card>
             );
           })}
