@@ -24,6 +24,9 @@ export type ServiceSummary = {
 };
 
 export type Result<T> = { status: "ok"; data: T } | { status: "error" };
+export type PaginatedResult<T> =
+  | { status: "ok"; data: T[]; totalCount: number; page: number; pageSize: number }
+  | { status: "error" };
 
 const SERVICE_COLUMNS = `
   id, name, description, duration_minutes, category_id, price_paisa, tax_rate_percent,
@@ -93,6 +96,37 @@ export async function listAllServices(): Promise<Result<ServiceSummary[]>> {
   }
 
   return { status: "ok", data: (data ?? []).map(toSummary) };
+}
+
+/**
+ * One page of the service catalog, for the admin screen.
+ *
+ * Paged in Postgres rather than by slicing a full read: a practice's catalog
+ * is one row per thing it charges for, which is not a bounded number — this
+ * one already has 96. listAllServices() stays for the callers that genuinely
+ * need every row at once, above all the category dropdown on this same page.
+ */
+export async function listServicesPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<PaginatedResult<ServiceSummary>> {
+  const supabase = await createClient();
+  const page = Math.max(1, options.page ?? 1);
+  const pageSize = options.pageSize ?? 25;
+  const start = (page - 1) * pageSize;
+
+  const { data, error, count } = await supabase
+    .from("services")
+    .select(SERVICE_COLUMNS, { count: "exact" })
+    .is("deleted_at", null)
+    .order("sort_order")
+    .range(start, start + pageSize - 1);
+
+  if (error) {
+    console.error("[services] paged list failed", error);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (data ?? []).map(toSummary), totalCount: count ?? 0, page, pageSize };
 }
 
 export async function getService(serviceId: string): Promise<Result<ServiceSummary | null>> {

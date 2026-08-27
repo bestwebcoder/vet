@@ -39,7 +39,14 @@ function AddCategoryForm() {
   );
 }
 
-export function ServiceCategoryManager({ categories }: { categories: ServiceCategory[] }) {
+export function ServiceCategoryManager({
+  categories,
+  pagination,
+}: {
+  categories: ServiceCategory[];
+  /** Rendered under the list. Passed in because paging is decided by the page, which owns the URL. */
+  pagination?: React.ReactNode;
+}) {
   return (
     <Card>
       <CardHeader>
@@ -61,6 +68,8 @@ export function ServiceCategoryManager({ categories }: { categories: ServiceCate
             ))}
           </ul>
         )}
+
+        {pagination}
 
         <AddCategoryForm />
       </CardContent>
