@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { Metadata } from "next";
 import { ClipboardList, Home } from "lucide-react";
 
@@ -111,42 +112,46 @@ export default async function ServicesPage({ searchParams }: PageProps<"/service
                 description="Check back soon — our services will appear here once they're set up."
               />
             ) : (
-              <div className="grid gap-10">
+              // One continuous grid rather than a grid per category: a heading
+              // spans the full row and the cards keep flowing after it, so a
+              // category with two services no longer leaves a row two-thirds
+              // empty the way a grid of its own did.
+              <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                 {groups.map((group) => (
-                  <div key={group.heading} className="grid gap-4">
-                    <div className="flex items-baseline gap-3">
+                  <Fragment key={group.heading}>
+                    <div className="col-span-full flex items-baseline gap-3 pt-6 first:pt-0">
                       <h2 className="text-xl font-semibold tracking-tight">{group.heading}</h2>
                       <span className="text-muted-foreground text-sm tabular-nums">{group.services.length}</span>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {group.services.map((service) => (
-                        <Card key={service.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
-                          <CardContent className="grid gap-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="font-medium">{service.name}</p>
-                              {service.isHomeVisitAvailable ? (
-                                <Badge variant="secondary">
-                                  <Home aria-hidden />
-                                  Home visit available
-                                </Badge>
-                              ) : null}
-                            </div>
-                            {service.description ? (
-                              <p className="text-muted-foreground text-sm">{service.description}</p>
+
+                    {group.services.map((service) => (
+                      <Card key={service.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
+                        <CardContent className="grid gap-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium">{service.name}</p>
+                            {service.isHomeVisitAvailable ? (
+                              <Badge variant="secondary">
+                                <Home aria-hidden />
+                                Home visit available
+                              </Badge>
                             ) : null}
-                            <div className="mt-1 flex items-baseline justify-between">
-                              <span className="font-semibold" data-numeric>
-                                {service.price}
-                              </span>
-                              <span className="text-muted-foreground text-sm">{service.durationMinutes} min</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
+                          </div>
+                          {service.description ? (
+                            <p className="text-muted-foreground text-sm">{service.description}</p>
+                          ) : null}
+                          <div className="mt-1 flex items-baseline justify-between">
+                            <span className="font-semibold" data-numeric>
+                              {service.price}
+                            </span>
+                            <span className="text-muted-foreground text-sm">{service.durationMinutes} min</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </Fragment>
                 ))}
 
+                <div className="col-span-full pt-4">
                 <Pagination
                   basePath="/services"
                   searchParams={{}}
@@ -154,6 +159,7 @@ export default async function ServicesPage({ searchParams }: PageProps<"/service
                   pageSize={PAGE_SIZE}
                   totalCount={services.length}
                 />
+                </div>
               </div>
             )}
           </div>
