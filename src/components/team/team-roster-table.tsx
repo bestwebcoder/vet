@@ -116,8 +116,12 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
           </div>
         ) : null}
       </TableCell>
-      <TableCell>
-        <div className="flex flex-col items-stretch gap-2">
+      <TableCell className="whitespace-normal">
+        {/* Laid out in a row, matching the doctor cards at /admin/doctors.
+            The column is deliberately not width-constrained: a `w-px` here
+            collapses it to min-content, which wraps every button onto its
+            own line. */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <AdminEditIdentityDialog targetUserId={member.userId} fullName={member.fullName} phone={member.phone} />
           <AdminChangeEmailDialog targetUserId={member.userId} targetName={member.fullName} email={member.email} />
           <AdminSetPasswordDialog targetUserId={member.userId} targetName={member.fullName} />
@@ -151,7 +155,7 @@ export function TeamRosterTable({ members }: { members: TeamMember[] }) {
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead className="w-px" />
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
