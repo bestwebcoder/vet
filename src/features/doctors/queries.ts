@@ -202,11 +202,17 @@ export type PublicDoctor = {
  * every practice in the database. On this one it listed 507 doctors across 60
  * organizations for a practice with 432 of its own, putting other practices'
  * staff on the marketing page.
+ *
+ * organizationId is required, not optional, and that is the point: the same
+ * fault appeared twice (here and in getPublicServices) because the filter was
+ * something a caller had to remember. Now the caller cannot compile without
+ * one, and "no practice resolved" has to be answered deliberately — with
+ * nothing, never with everything.
  */
-export async function getPublicDoctors(organizationId?: string): Promise<Result<PublicDoctor[]>> {
+export async function getPublicDoctors(organizationId: string): Promise<Result<PublicDoctor[]>> {
   const supabase = createServiceClient();
 
-  let query = supabase
+  const query = supabase
     .from("doctors")
     .select(
       "id, specialization, qualifications, bio, photo_path, updated_at, is_lead_doctor, user:user_id (full_name), branch:primary_branch_id (name)",
@@ -214,9 +220,7 @@ export async function getPublicDoctors(organizationId?: string): Promise<Result<
     .is("deleted_at", null)
     .order("id");
 
-  if (organizationId) query = query.eq("organization_id", organizationId);
-
-  const { data, error } = await query;
+  const { data, error } = await query.eq("organization_id", organizationId);
 
   if (error) {
     console.error("[doctors] public list failed", error);
@@ -240,11 +244,4 @@ export async function getPublicDoctors(organizationId?: string): Promise<Result<
       };
     }),
   };
-}
-
-/** The featured "Meet our lead doctor" section on the Home/About page — at most one, enforced by a partial unique index. */
-export async function getPublicLeadDoctor(organizationId?: string): Promise<PublicDoctor | null> {
-  const result = await getPublicDoctors(organizationId);
-  if (result.status === "error") return null;
-  return result.data.find((doctor) => doctor.isLeadDoctor) ?? null;
 }

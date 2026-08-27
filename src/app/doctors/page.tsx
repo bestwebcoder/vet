@@ -66,7 +66,10 @@ function intoGroups(doctors: PublicDoctor[]): { heading: string; doctors: Public
 
 export default async function DoctorsPage({ searchParams }: PageProps<"/doctors">) {
   const organization = await getPublicOrganizationInfo();
-  const doctorsResult = await getPublicDoctors(organization?.id);
+  // No practice resolved means nothing to show — never everything.
+  const doctorsResult = organization
+    ? await getPublicDoctors(organization.id)
+    : { status: "ok" as const, data: [] };
   const practiceName = organization?.name ?? "The Traveling Vet";
 
   const { page: pageParam } = await searchParams;

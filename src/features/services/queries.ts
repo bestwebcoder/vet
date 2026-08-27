@@ -165,11 +165,14 @@ export async function getService(serviceId: string): Promise<Result<ServiceSumma
  * meant every practice in the database. Measured here: 1,578 services across
  * 201 organizations listed on the price list of a practice with 122 of its
  * own. Same fault as getPublicDoctors had.
+ *
+ * organizationId is required rather than optional: a filter a caller has to
+ * remember is one a caller forgets, which is how this happened twice.
  */
-export async function getPublicServices(organizationId?: string): Promise<Result<ServiceSummary[]>> {
+export async function getPublicServices(organizationId: string): Promise<Result<ServiceSummary[]>> {
   const supabase = createServiceClient();
 
-  let query = supabase
+  const query = supabase
     .from("services")
     .select(SERVICE_COLUMNS)
     .eq("is_active", true)
@@ -177,9 +180,7 @@ export async function getPublicServices(organizationId?: string): Promise<Result
     .is("deleted_at", null)
     .order("sort_order");
 
-  if (organizationId) query = query.eq("organization_id", organizationId);
-
-  const { data, error } = await query;
+  const { data, error } = await query.eq("organization_id", organizationId);
 
   if (error) {
     console.error("[services] public list failed", error);

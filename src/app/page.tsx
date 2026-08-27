@@ -28,7 +28,10 @@ export default async function RootPage() {
 
   if (!user || home) {
     const organization = await getPublicOrganizationInfo();
-  const doctorsResult = await getPublicDoctors(organization?.id);
+    // No practice resolved means nothing to show — never everything.
+    const doctorsResult = organization
+      ? await getPublicDoctors(organization.id)
+      : { status: "ok" as const, data: [] };
     const [content, homeSections] = await Promise.all([
       organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
       organization

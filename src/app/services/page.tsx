@@ -57,7 +57,10 @@ function intoGroups(services: ServiceSummary[]) {
 
 export default async function ServicesPage({ searchParams }: PageProps<"/services">) {
   const organization = await getPublicOrganizationInfo();
-  const servicesResult = await getPublicServices(organization?.id);
+  // No practice resolved means nothing to show — never everything.
+  const servicesResult = organization
+    ? await getPublicServices(organization.id)
+    : { status: "ok" as const, data: [] };
   const practiceName = organization?.name ?? "The Traveling Vet";
   const [content, sections] = await Promise.all([
     organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
