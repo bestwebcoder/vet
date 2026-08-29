@@ -27,6 +27,7 @@ export default async function PetLayout({ children, params }: LayoutProps<"/clie
       pet={result.data}
       photoUrl={photoUrl}
       basePath={`/client/pets/${result.data.id}`}
+      canDelete
     >
       {children}
     </PetRecordFrame>

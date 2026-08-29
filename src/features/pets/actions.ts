@@ -312,6 +312,65 @@ export async function archivePetAction(_previous: FormState, formData: FormData)
   return { status: "success", message: "Patient archived." };
 }
 
+/**
+ * A client removing a pet from their own account. Soft-deletes like every
+ * other removal in this app (CLAUDE.md §6/§16, and the pattern archivePetAction
+ * follows above): this pet's SOAP notes, prescriptions, invoices and
+ * vaccination history are never destroyed, only hidden from the client. Only
+ * the record's own owner may trigger it — resolved from the caller's session,
+ * never taken from the form — and row level security enforces the same scope
+ * independently. There is no client-facing undo: restorePetAction stays
+ * clinic-staff only, so a client who deletes by mistake needs to contact the
+ * clinic, the same as the deactivate/restore pattern elsewhere in this app.
+ */
+export async function deletePetAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("client");
+
+  const petId = text(formData, "petId");
+  if (!petId) return { status: "error", message: "We could not tell which pet to delete." };
+
+  const user = await getSessionUser();
+  if (!user) return { status: "error", message: "Please sign in again." };
+
+  const supabase = await createClient();
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!client) {
+    return {
+      status: "error",
+      message: "Your client record is not set up yet. Contact your clinic for help.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("pets")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", petId)
+    .eq("client_id", client.id)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    return failure("pets", error, "We could not delete this pet just now. Please try again.");
+  }
+
+  if (!data) {
+    return { status: "error", message: "You do not have access to this pet." };
+  }
+
+  revalidatePath("/client");
+  revalidatePath("/client/pets");
+
+  return { status: "success", message: "Pet deleted." };
+}
+
 export async function restorePetAction(_previous: FormState, formData: FormData): Promise<FormState> {
   await requireRole("admin", "super_admin", "doctor");
 
