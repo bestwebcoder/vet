@@ -113,6 +113,16 @@ describe("reaching another client's pet directly", () => {
     expect(response.status).toBe(404);
   });
 
+  it("offers the owner a way to remove their own pet", async () => {
+    const html = await (await ownerSession.page(`/client/pets/${ownPetId}`)).text();
+
+    expect(html).toContain(OWN_PET);
+    expect(html).toContain("Delete");
+    // The client's control is a delete, not the clinic's archive/restore
+    // toggle — that one stays staff-only.
+    expect(html).not.toContain("Archive");
+  });
+
   it("lets the owner open their own", async () => {
     const response = await ownerSession.page(`/client/pets/${ownPetId}/edit`);
     const html = await response.text();

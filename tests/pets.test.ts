@@ -316,6 +316,66 @@ describe("clinical data is constrained at the database", () => {
   });
 });
 
+describe("a client removing their own pet", () => {
+  let retired: string;
+
+  beforeAll(async () => {
+    retired = await insertPet({
+      client_id: clientRecordA,
+      organization_id: orgA,
+      name: `Retiring ${RUN}`,
+      species_id: dogSpecies,
+    });
+  });
+
+  it("marks it deleted rather than destroying the record", async () => {
+    const { data, error } = await clientA
+      .from("pets")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", retired)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data?.map((row) => row.id)).toEqual([retired]);
+
+    // Read as the service role: the owner's own queries filter deleted pets
+    // out, and the point of this assertion is that the row is still there.
+    const { data: after } = await admin
+      .from("pets")
+      .select("deleted_at")
+      .eq("id", retired)
+      .maybeSingle();
+
+    expect(after?.deleted_at).not.toBeNull();
+  });
+
+  it("takes it out of what the owner sees", async () => {
+    const { data } = await clientA.from("pets").select("id").eq("id", retired).is("deleted_at", null);
+
+    expect(data).toEqual([]);
+  });
+
+  it("cannot reach another client's pet", async () => {
+    const { data, error } = await clientA
+      .from("pets")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", petB)
+      .select("id");
+
+    // The policies match no row, which is a no-op rather than an error.
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+
+    const { data: after } = await admin
+      .from("pets")
+      .select("deleted_at")
+      .eq("id", petB)
+      .maybeSingle();
+
+    expect(after?.deleted_at).toBeNull();
+  });
+});
+
 describe("audit trail", () => {
   it("records patient creation", async () => {
     const { data } = await admin
