@@ -25,6 +25,7 @@ let orgB: string;
 let adminSession: Session;
 let doctorSession: Session;
 let doctorDb: SupabaseClient;
+let adminDb: SupabaseClient;
 let otherOrgDoctorSession: Session;
 let clientId: string;
 let petId: string;
@@ -108,11 +109,12 @@ beforeAll(async () => {
     .single();
   otherOrgPetId = otherPet!.id;
 
-  [adminSession, doctorSession, otherOrgDoctorSession, doctorDb] = await Promise.all([
+  [adminSession, doctorSession, otherOrgDoctorSession, doctorDb, adminDb] = await Promise.all([
     signIn(adminUser.email),
     signIn(doctorUser.email),
     signIn(otherDoctor.email),
     signedInClient(doctorUser.email),
+    signedInClient(adminUser.email),
   ]);
 }, 120_000);
 
@@ -322,5 +324,105 @@ describe("clinic staff manage patients, as §2.3 requires", () => {
     });
 
     expect(error).not.toBeNull();
+  });
+});
+
+/**
+ * Deleting a doctor, as opposed to deactivating one.
+ *
+ * The guarantee worth holding onto is the asymmetry: a profile nobody has used
+ * can be removed outright, and a doctor who has seen a patient cannot be
+ * removed at all — by an administrator or anybody else.
+ */
+describe("deleting a doctor", () => {
+  async function createDoctorRecord(label: string) {
+    const user = await createUserWithRole(`del-${label}-${RUN}`, "doctor", orgA);
+    const { data, error } = await admin
+      .from("doctors")
+      .insert({ user_id: user.userId, organization_id: orgA })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { doctorId: data.id as string, userId: user.userId, email: user.email };
+  }
+
+  it("removes an unused doctor, their availability and their role, and records what it removed", async () => {
+    const { doctorId, userId } = await createDoctorRecord("clean");
+
+    await admin
+      .from("doctor_availability")
+      .insert({ doctor_id: doctorId, organization_id: orgA, weekday: 2, starts_at: "09:00", ends_at: "17:00" });
+
+    const { error } = await adminDb.rpc("delete_doctor", { p_doctor_id: doctorId });
+    expect(error).toBeNull();
+
+    const { data: doctorRow } = await admin.from("doctors").select("id").eq("id", doctorId);
+    expect(doctorRow).toEqual([]);
+
+    const { data: availability } = await admin.from("doctor_availability").select("id").eq("doctor_id", doctorId);
+    expect(availability).toEqual([]);
+
+    const { data: roles } = await admin
+      .from("user_roles")
+      .select("revoked_at, role:role_id (slug)")
+      .eq("user_id", userId)
+      .eq("organization_id", orgA);
+    expect(roles?.every((row) => row.revoked_at !== null)).toBe(true);
+
+    // The login itself is deliberately left alone — it may be the same
+    // person's client account.
+    const { data: stillAUser } = await admin.from("users").select("id").eq("id", userId).single();
+    expect(stillAUser?.id).toBe(userId);
+
+    // Destroyed, but not silently: the whole row survives in the audit log.
+    const { data: audited } = await admin
+      .from("audit_logs")
+      .select("action, metadata")
+      .eq("entity_id", doctorId)
+      .eq("action", "doctors.delete")
+      .limit(1);
+    expect(audited?.[0]?.metadata?.deleted?.id).toBe(doctorId);
+  });
+
+  it("refuses to remove a doctor with an appointment, and leaves the record untouched", async () => {
+    const { doctorId } = await createDoctorRecord("busy");
+
+    const { data: service } = await admin.from("services").select("id").eq("organization_id", orgA).limit(1).single();
+    const starts = new Date(Date.now() + 86_400_000);
+    const ends = new Date(starts.getTime() + 1_800_000);
+
+    const { error: apptError } = await admin.from("appointments").insert({
+      organization_id: orgA,
+      client_id: clientId,
+      pet_id: petId,
+      doctor_id: doctorId,
+      service_id: service!.id,
+      visit_type: "clinic",
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      status: "confirmed",
+    });
+    expect(apptError).toBeNull();
+
+    const { error } = await adminDb.rpc("delete_doctor", { p_doctor_id: doctorId });
+    expect(error?.code).toBe("23001");
+
+    const { data: stillThere } = await admin.from("doctors").select("id").eq("id", doctorId);
+    expect(stillThere).toEqual([{ id: doctorId }]);
+  });
+
+  it("is closed to a doctor and to another practice's admin", async () => {
+    const { doctorId } = await createDoctorRecord("guarded");
+
+    const { error: byDoctor } = await doctorDb.rpc("delete_doctor", { p_doctor_id: doctorId });
+    expect(byDoctor).not.toBeNull();
+
+    const outsider = await createUserWithRole(`del-outsider-${RUN}`, "admin", orgB);
+    const outsiderDb = await signedInClient(outsider.email);
+    const { error: byOutsider } = await outsiderDb.rpc("delete_doctor", { p_doctor_id: doctorId });
+    expect(byOutsider).not.toBeNull();
+
+    const { data: stillThere } = await admin.from("doctors").select("id").eq("id", doctorId);
+    expect(stillThere).toEqual([{ id: doctorId }]);
   });
 });

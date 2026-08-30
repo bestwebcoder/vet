@@ -245,3 +245,60 @@ export async function getPublicDoctors(organizationId: string): Promise<Result<P
     }),
   };
 }
+
+/**
+ * What is holding a doctor record in place — the tables whose foreign keys are
+ * ON DELETE RESTRICT, counted so the Delete dialog can name them rather than
+ * saying no without a reason.
+ *
+ * Only ever run for the one doctor an administrator is deleting, so five
+ * counts is not a cost worth designing around. `delete_doctor` runs the same
+ * check itself; this exists so the answer is a sentence instead of an error
+ * code.
+ */
+export type DoctorHistory = {
+  appointments: number;
+  soapRecords: number;
+  prescriptions: number;
+  vaccinations: number;
+  dewormingRecords: number;
+  total: number;
+};
+
+export async function countDoctorHistory(doctorId: string): Promise<Result<DoctorHistory>> {
+  const supabase = await createClient();
+
+  const countFor = async (table: string) => {
+    const { count, error } = await supabase
+      .from(table)
+      .select("id", { count: "exact", head: true })
+      .eq("doctor_id", doctorId);
+    if (error) throw error;
+    return count ?? 0;
+  };
+
+  try {
+    const [appointments, soapRecords, prescriptions, vaccinations, dewormingRecords] = await Promise.all([
+      countFor("appointments"),
+      countFor("soap_records"),
+      countFor("prescriptions"),
+      countFor("vaccinations"),
+      countFor("deworming_records"),
+    ]);
+
+    return {
+      status: "ok",
+      data: {
+        appointments,
+        soapRecords,
+        prescriptions,
+        vaccinations,
+        dewormingRecords,
+        total: appointments + soapRecords + prescriptions + vaccinations + dewormingRecords,
+      },
+    };
+  } catch (error) {
+    console.error("[doctors] history count failed", error);
+    return { status: "error" };
+  }
+}

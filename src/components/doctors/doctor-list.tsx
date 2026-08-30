@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Pencil, UserRound } from "lucide-react";
 
+import { DeleteDoctorDialog } from "@/components/doctors/delete-doctor-dialog";
 import { DoctorEditForm } from "@/components/doctors/doctor-edit-form";
 import { AdminChangeEmailDialog } from "@/components/profile/admin-change-email-dialog";
 import { AdminSetPasswordDialog } from "@/components/profile/admin-set-password-dialog";
@@ -66,9 +67,12 @@ function EditDoctorDialog({ doctor, branches }: { doctor: DoctorSummary; branche
 export function DoctorList({
   doctors,
   branches,
+  canDelete,
 }: {
   doctors: DoctorSummary[];
   branches: { id: string; name: string }[];
+  /** Deleting is admin-only; a receptionist sharing this screen is not shown it. */
+  canDelete: boolean;
 }) {
   return (
     <div className="grid gap-3">
@@ -114,6 +118,7 @@ export function DoctorList({
               <AdminSetPasswordDialog targetUserId={doctor.userId} targetName={doctor.fullName} />
               <LeadDoctorToggle doctor={doctor} />
               <DeactivateToggle doctor={doctor} />
+              {canDelete ? <DeleteDoctorDialog doctor={doctor} /> : null}
             </div>
           </CardContent>
         </Card>

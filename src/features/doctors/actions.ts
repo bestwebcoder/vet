@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/features/auth/session";
-import { getOwnDoctorRecord } from "@/features/doctors/queries";
+import { countDoctorHistory, getOwnDoctorRecord } from "@/features/doctors/queries";
 import { describeDoctorPhotoProblem, readDoctorPhoto, uploadDoctorPhoto } from "@/features/doctors/photo";
 import { describeSignatureProblem, readSignature, uploadDoctorSignature } from "@/features/doctors/signature";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
@@ -255,4 +255,84 @@ export async function reactivateDoctorAction(_previous: FormState, formData: For
 
   revalidatePath("/admin/doctors");
   return { status: "success", message: "Doctor reactivated." };
+}
+
+/**
+ * Turns the counts into the half-sentence the refusal reads with, longest
+ * first: "12 appointments, 5 SOAP records and 1 prescription".
+ */
+function describeDoctorHistory(history: {
+  appointments: number;
+  soapRecords: number;
+  prescriptions: number;
+  vaccinations: number;
+  dewormingRecords: number;
+}): string {
+  const parts = [
+    [history.appointments, "appointment"],
+    [history.soapRecords, "SOAP record"],
+    [history.prescriptions, "prescription"],
+    [history.vaccinations, "vaccination"],
+    [history.dewormingRecords, "deworming record"],
+  ] as const;
+
+  const named = parts
+    .filter(([count]) => count > 0)
+    .map(([count, noun]) => `${count} ${noun}${count === 1 ? "" : "s"}`);
+
+  if (named.length === 0) return "";
+  if (named.length === 1) return named[0];
+  return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
+}
+
+/**
+ * Deletes a doctor record for good.
+ *
+ * Deliberately narrow, and not the same button as Deactivate: this is for a
+ * profile that should never have existed — an invitation sent twice, the wrong
+ * person invited. A doctor who has actually seen a patient keeps their
+ * records, and the delete refuses by naming what is holding it (CLAUDE.md §6,
+ * §16).
+ *
+ * The removal itself happens in `delete_doctor`, one transaction that also
+ * clears the doctor's availability and revokes their doctor role at this
+ * practice. The login account is left alone: it may be the same person's
+ * client account, and an account is not this screen's to destroy.
+ */
+export async function deleteDoctorAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin");
+
+  const doctorId = text(formData, "doctorId");
+  if (!doctorId) return { status: "error", message: "We could not tell which doctor to delete." };
+
+  const history = await countDoctorHistory(doctorId);
+  if (history.status === "error") {
+    return { status: "error", message: "We could not check this doctor's records just now. Please try again." };
+  }
+
+  if (history.data.total > 0) {
+    return {
+      status: "error",
+      message: `This doctor has ${describeDoctorHistory(history.data)} and cannot be deleted. Deactivate them instead — that removes their access and keeps their records intact.`,
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_doctor", { p_doctor_id: doctorId });
+
+  if (error) {
+    // The function runs the same history check inside the transaction, so a
+    // record created between the count above and this call lands here rather
+    // than being deleted.
+    if (error.code === "23001") {
+      return {
+        status: "error",
+        message: "This doctor now has appointment or clinical history and cannot be deleted. Deactivate them instead.",
+      };
+    }
+    return failure("doctors", error, "We could not delete this doctor just now. Please try again.");
+  }
+
+  revalidatePath("/admin/doctors");
+  return { status: "success", message: "Doctor deleted." };
 }

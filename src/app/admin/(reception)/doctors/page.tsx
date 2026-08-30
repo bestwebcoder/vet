@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireAccess } from "@/features/auth/access";
+import { hasRole } from "@/features/auth/session";
 import { listBranches } from "@/features/clients/queries";
 import { listDoctorsForAdmin } from "@/features/doctors/queries";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,8 @@ import { UserRound } from "lucide-react";
 export const metadata: Metadata = { title: "Doctors · TV Care" };
 
 export default async function AdminDoctorsPage({ searchParams }: PageProps<"/admin/doctors">) {
-  await requireAccess("reception");
+  const user = await requireAccess("reception");
+  const canDelete = hasRole(user, "admin", "super_admin");
   const { show, page: pageParam } = await searchParams;
   const show_ = typeof show === "string" ? show : undefined;
   const includeInactive = show_ === "all";
@@ -76,7 +78,7 @@ export default async function AdminDoctorsPage({ searchParams }: PageProps<"/adm
         </Card>
       ) : (
         <div className="grid gap-4">
-          <DoctorList doctors={doctorsResult.data} branches={branches} />
+          <DoctorList doctors={doctorsResult.data} branches={branches} canDelete={canDelete} />
           <Pagination
             basePath="/admin/doctors"
             searchParams={{ show: show_ }}
