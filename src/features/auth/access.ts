@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import {
-  hasPermission,
+  hasCustomRolePermission,
   hasRole,
   requireUser,
   type RoleSlug,
@@ -73,9 +73,13 @@ export async function requireAccess(area: AreaKey): Promise<SessionUser> {
   if (hasRole(user, ...ACCESS[area])) return user;
 
   // `shared` is the dashboard, profile and search: anyone with a desk here,
-  // which is anyone holding any permission at all.
+  // which is anyone a practice-defined role gave any permission at all. The
+  // built-in roles are admitted by the `hasRole` check above, so their own
+  // permission rows are not consulted here — see hasCustomRolePermission.
   const permitted =
-    area === "shared" ? user.permissions.length > 0 : hasPermission(user, ...AREA_PERMISSIONS[area]);
+    area === "shared"
+      ? user.customPermissions.length > 0
+      : hasCustomRolePermission(user, ...AREA_PERMISSIONS[area]);
 
   if (!permitted) redirect("/no-access");
 

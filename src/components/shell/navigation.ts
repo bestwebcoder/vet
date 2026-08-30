@@ -170,6 +170,11 @@ export const AREAS: Record<Area["key"], Area> = {
 /**
  * The items this person may see in an area. An item with no `roles` is
  * administrators-only; anything else lists the roles it belongs to.
+ *
+ * `permissions` is the caller's custom-role permissions, not every key they
+ * hold: the built-in roles are matched by the `roles` check above, and since
+ * they carry real permission rows (20261006000100) reading the full union
+ * here would add menu items to roles that cannot reach the pages behind them.
  */
 export function navFor(area: Area["key"], roles: RoleSlug[], permissions: string[] = []): NavItem[] {
   return AREAS[area].nav.filter((item) => {

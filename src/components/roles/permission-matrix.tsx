@@ -22,7 +22,7 @@ export function PermissionMatrix({
   disabled = false,
 }: {
   defaultPermissions: string[];
-  /** A system role: shown exactly as it is, and not editable. */
+  /** Renders every checkbox read-only, for a context that only wants to show a set. */
   disabled?: boolean;
 }) {
   const [granted, setGranted] = useState<Set<string>>(new Set(defaultPermissions));

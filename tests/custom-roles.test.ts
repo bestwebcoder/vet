@@ -186,13 +186,21 @@ describe("the permission model cannot be used to escalate", () => {
     expect(assigned.error).not.toBeNull();
   });
 
-  it("refuses to let anybody edit a built-in role", async () => {
+  // A built-in role's name and permissions ARE editable by any admin now
+  // (20261007000100) — deliberately, and covered in "editing a built-in
+  // role" below. What stays refused is the one escalation that section is
+  // named for: a permission cannot be used to reach role administration
+  // itself, and a role's identity cannot move.
+  it("still refuses to let a permission open role administration", async () => {
+    const roleId = await makeRole(orgA, `wouldbeadmin${RUN}`, ["team.view"]);
+    const holder = await signedInHolder(`wouldbeadmin${RUN}`, roleId, orgA);
+
     const { data: builtIn } = await admin.from("roles").select("id").eq("slug", "receptionist").single();
 
-    const renamed = await adminA.from("roles").update({ name: "Renamed" }).eq("id", builtIn!.id).select("id");
+    const renamed = await holder.from("roles").update({ name: "Renamed" }).eq("id", builtIn!.id).select("id");
     expect(renamed.data ?? []).toEqual([]);
 
-    const regranted = await adminA
+    const regranted = await holder
       .from("role_permissions")
       .insert({ role_id: builtIn!.id, permission_key: "billing.manage" });
     expect(regranted.error).not.toBeNull();
@@ -226,13 +234,55 @@ describe("the built-in roles still mean what they meant", () => {
     expect(bySlug.get("admin")).toHaveLength(count ?? 0);
     expect(bySlug.get("super_admin")).toHaveLength(count ?? 0);
 
-    // The others hold none. Seeding them with near-matching keys would either
-    // describe them wrongly or, because these permissions are real, widen what
-    // they can reach — a receptionist gaining documents because "patients.view"
-    // looked close enough.
-    for (const slug of ["doctor", "client", "finance_manager", "lab", "receptionist"]) {
-      expect(bySlug.get(slug) ?? [], `${slug} should hold no matrix permissions`).toEqual([]);
+    // The four staff roles hold exactly the keys whose policies they already
+    // satisfied before the matrix existed (20261006000100). The sets are short
+    // on purpose: a key is here only when every table and command it unlocks
+    // was already reachable through that role's own policies, so none of them
+    // widened anything. Change one of these lists and you are changing what
+    // that role can do, not what the screen says about it.
+    const expected: Record<string, string[]> = {
+      doctor: [
+        "appointments.manage",
+        "appointments.view",
+        "billing.view",
+        "clients.manage",
+        "clients.view",
+        "clinical.view",
+        "patients.manage",
+        "patients.view",
+      ],
+      receptionist: [
+        "appointments.manage",
+        "appointments.view",
+        "clients.view",
+        "doctors.view",
+        "notifications.view",
+        "patients.view",
+        "preventive.view",
+        "services.view",
+      ],
+      finance_manager: ["appointments.view", "billing.view", "clients.view", "services.view"],
+      lab: ["appointments.view", "clients.view", "patients.view"],
+    };
+
+    for (const [slug, keys] of Object.entries(expected)) {
+      expect([...(bySlug.get(slug) ?? [])].sort(), `${slug}'s permissions`).toEqual(keys);
     }
+
+    // Deliberately absent, and the reason each is absent:
+    //   clinical.view for lab/receptionist — it unlocks SOAP notes and
+    //   prescriptions, which neither may read;
+    //   billing.manage for finance_manager — they record a payment, they do
+    //   not edit one afterwards;
+    //   notifications.manage for receptionist — enquiries, not templates.
+    expect(bySlug.get("lab")).not.toContain("clinical.view");
+    expect(bySlug.get("receptionist")).not.toContain("clinical.view");
+    expect(bySlug.get("receptionist")).not.toContain("notifications.manage");
+    expect(bySlug.get("finance_manager")).not.toContain("billing.manage");
+
+    // A client's access is their own records — owns_client() — not a
+    // permission the practice grants.
+    expect(bySlug.get("client") ?? []).toEqual([]);
   });
 
   it("offers no permission that would let anyone but a vet author a clinical record", async () => {
@@ -288,5 +338,176 @@ describe("the built-in roles still mean what they meant", () => {
     // additive.
     const { data } = await receptionist.from("invoices").select("id");
     expect(data ?? []).toEqual([]);
+  });
+});
+
+describe("editing a built-in role", () => {
+  /**
+   * Restored inside the same test, in try/finally, regardless of pass or
+   * fail. There is one Lab row for the whole platform (fileParallelism is off
+   * in vitest.config.ts specifically so suites don't step on shared state
+   * like this one), and every other file that asserts what Lab holds —
+   * routes.test.ts, permission-matrix.test.ts, this file's own "the built-in
+   * roles still mean what they meant" — must see it exactly as seeded when
+   * its turn comes.
+   */
+  it("takes effect for every practice, not just the editor's own", async () => {
+    const { data: before } = await admin
+      .from("roles")
+      .select("id, name, description, slug, is_system, organization_id, role_permissions(permission_key)")
+      .eq("slug", "lab")
+      .single();
+    const labId = before!.id as string;
+    const originalKeys = (before!.role_permissions as { permission_key: string }[]).map((r) => r.permission_key);
+
+    // orgA's admin — unconnected to Lab's "home", because it has none. A
+    // built-in role belongs to every practice equally.
+    const labInOrgB = await createUserWithRole(`lab-editme-${RUN}`, "lab", orgB);
+    const labUser = await signedInClient(labInOrgB.email);
+
+    // Not granted by the seed (20261006000100): reading a vaccination
+    // schedule is preventive.view, not preventive.manage, and Lab holds
+    // neither preventive key.
+    const before_write = await labUser
+      .from("vaccination_schedules")
+      .insert({ organization_id: orgB, vaccine_name: `Should fail ${RUN}`, interval_value: 1, interval_unit: "years" });
+    expect(before_write.error).not.toBeNull();
+
+    try {
+      const { data: renamed, error: renameError } = await adminA
+        .from("roles")
+        .update({ name: "Laboratory", description: "Diagnostics." })
+        .eq("id", labId)
+        .select("id, name, is_system, organization_id, slug")
+        .single();
+      expect(renameError).toBeNull();
+      expect(renamed).toMatchObject({ name: "Laboratory", is_system: true, organization_id: null, slug: "lab" });
+
+      const { error: clearError } = await adminA.from("role_permissions").delete().eq("role_id", labId);
+      expect(clearError).toBeNull();
+      const { error: grantError } = await adminA
+        .from("role_permissions")
+        .insert([...originalKeys, "preventive.manage"].map((permission_key) => ({ role_id: labId, permission_key })));
+      expect(grantError).toBeNull();
+
+      // The whole point: an orgA admin's edit to the shared Lab role just
+      // changed what an orgB lab user may do, with no grant made in orgB.
+      const { error: afterError } = await labUser
+        .from("vaccination_schedules")
+        .insert({ organization_id: orgB, vaccine_name: `Should work ${RUN}`, interval_value: 1, interval_unit: "years" });
+      expect(afterError).toBeNull();
+    } finally {
+      await admin.from("roles").update({ name: before!.name, description: before!.description }).eq("id", labId);
+      await admin.from("role_permissions").delete().eq("role_id", labId);
+      if (originalKeys.length > 0) {
+        await admin
+          .from("role_permissions")
+          .insert(originalKeys.map((permission_key) => ({ role_id: labId, permission_key })));
+      }
+    }
+  });
+
+  it("keeps a role's identity fixed no matter who asks", async () => {
+    const { data: doctorRole } = await admin.from("roles").select("id").eq("slug", "doctor").single();
+
+    const attempts = [
+      { slug: "veterinarian" },
+      { is_system: false },
+      { organization_id: orgA },
+    ];
+
+    for (const change of attempts) {
+      // The service role bypasses RLS, but not a BEFORE UPDATE trigger — this
+      // is checked at the table, not the policy.
+      const { error } = await admin.from("roles").update(change).eq("id", doctorRole!.id);
+      expect(error, `${JSON.stringify(change)} should be refused`).not.toBeNull();
+    }
+
+    const { data: unchanged } = await admin
+      .from("roles")
+      .select("slug, is_system, organization_id")
+      .eq("id", doctorRole!.id)
+      .single();
+    expect(unchanged).toMatchObject({ slug: "doctor", is_system: true, organization_id: null });
+  });
+
+  it("still refuses anyone who is not an admin", async () => {
+    const nonAdmin = await createUserWithRole(`lab-guard-${RUN}`, "lab", orgA);
+    const nonAdminDb = await signedInClient(nonAdmin.email);
+
+    const { data: labRole } = await admin.from("roles").select("id").eq("slug", "lab").single();
+
+    const { data, error } = await nonAdminDb.from("roles").update({ name: "Hijacked" }).eq("id", labRole!.id).select();
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+
+    const { error: grantError } = await nonAdminDb
+      .from("role_permissions")
+      .insert({ role_id: labRole!.id, permission_key: "settings.manage" });
+    expect(grantError).not.toBeNull();
+  });
+});
+
+describe("deleting a built-in role", () => {
+  /**
+   * `deleteRoleAction` refuses while anyone holds a role, and for a built-in
+   * one that count is asked without an organization filter — see its comment
+   * in src/features/roles/actions.ts. That count-then-refuse branch is plain
+   * application logic, not a database policy, so — like the same guard on a
+   * custom role, which had no test before this one either — it is not
+   * exercised here; there is no harness in this suite for invoking a Next.js
+   * server action directly. What IS a policy, and is covered below, is that
+   * the delete itself (whichever role reaches it) is refused to anyone but an
+   * admin, and succeeds through the exact query shape the action issues.
+   */
+  it("goes through for a built-in role nobody holds, and can be put back", async () => {
+    const { data: before } = await admin
+      .from("roles")
+      .select("id, deleted_at")
+      .eq("slug", "super_admin")
+      .single();
+    expect(before!.deleted_at).toBeNull();
+
+    try {
+      // The exact shape deleteRoleAction issues: no organization_id filter,
+      // relying on roles_update (loosened for system roles by 20261007000100).
+      const { data, error } = await adminA
+        .from("roles")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", before!.id)
+        .is("deleted_at", null)
+        .select("id")
+        .maybeSingle();
+
+      expect(error).toBeNull();
+      expect(data?.id).toBe(before!.id);
+
+      const { data: gone } = await admin.from("roles").select("deleted_at").eq("id", before!.id).single();
+      expect(gone!.deleted_at).not.toBeNull();
+    } finally {
+      await admin.from("roles").update({ deleted_at: null }).eq("id", before!.id);
+    }
+
+    const { data: restored } = await admin.from("roles").select("deleted_at").eq("id", before!.id).single();
+    expect(restored!.deleted_at).toBeNull();
+  });
+
+  it("still refuses anyone who is not an admin", async () => {
+    const nonAdmin = await createUserWithRole(`delete-guard-${RUN}`, "lab", orgA);
+    const nonAdminDb = await signedInClient(nonAdmin.email);
+
+    const { data: labRole } = await admin.from("roles").select("id").eq("slug", "lab").single();
+
+    const { data, error } = await nonAdminDb
+      .from("roles")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", labRole!.id)
+      .select();
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+
+    const { data: untouched } = await admin.from("roles").select("deleted_at").eq("id", labRole!.id).single();
+    expect(untouched!.deleted_at).toBeNull();
   });
 });

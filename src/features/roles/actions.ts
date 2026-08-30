@@ -12,10 +12,17 @@ import { roleSchema, slugForRole } from "@/lib/validation/role";
  * Writes for the Roles screen.
  *
  * Administrator-only, and not by convention: the policies added in
- * 20260930000100_permissions.sql refuse an insert or update on `roles` and
- * `role_permissions` from anyone who is not an admin of the practice that owns
- * the role, and refuse them outright on a system role. `requireRole` here is
- * the clear error message, not the boundary.
+ * 20260930000100_permissions.sql (loosened for system roles by
+ * 20261007000100) refuse an insert or update on `roles` and `role_permissions`
+ * from anyone who is not an admin of the practice that owns the role — or, for
+ * a built-in role, an admin of any practice, since a built-in role belongs to
+ * all of them. `requireRole` here is the clear error message, not the
+ * boundary.
+ *
+ * A role's identity — its slug, is_system and organization_id — is fixed by a
+ * trigger in the same migration, not by anything in this file: what is left
+ * for createRoleAction and updateRoleAction to write is exactly name,
+ * description and the permission matrix.
  *
  * Why no permission gates this file: a permission that let someone edit roles
  * would let them grant themselves every other permission, which is not a
@@ -136,6 +143,11 @@ export async function updateRoleAction(_previous: FormState, formData: FormData)
 
   const supabase = await createClient();
 
+  // No organization_id filter: a system role's is null, and would never match
+  // one. The policy (roles_update) is the real boundary — an admin of any
+  // practice for a built-in role, an admin of the owning practice for its
+  // own — so the query only needs to ask for the row.
+  //
   // The slug is left alone. It is what a grant already made against this role
   // resolves through, and renaming "Nurse" to "Senior nurse" is a change of
   // label, not a change of role.
@@ -143,7 +155,6 @@ export async function updateRoleAction(_previous: FormState, formData: FormData)
     .from("roles")
     .update({ name: parsed.data.name, description: parsed.data.description })
     .eq("id", roleId)
-    .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .select("id")
     .maybeSingle();
@@ -174,12 +185,17 @@ export async function updateRoleAction(_previous: FormState, formData: FormData)
 }
 
 /**
- * Soft-deletes a custom role.
+ * Soft-deletes a role — a practice's own, or, since 20261007000100, a
+ * built-in one.
  *
- * Refused while anyone still holds it. The alternative — revoking everybody's
- * grant as a side effect — would take away several people's access from a
- * screen that asked about one role, and whoever pressed it would find out when
- * a colleague could not sign in.
+ * Refused while anyone still holds it, for a built-in role exactly as for a
+ * custom one: the alternative — revoking everybody's grant as a side effect —
+ * would take away access from a screen that asked about one role, and whoever
+ * pressed it would find out when a colleague could not sign in. For a custom
+ * role that is this practice's colleagues; for a built-in role, shared by
+ * every practice on the platform, it is every practice's. So the count for a
+ * built-in role is asked without an organization filter — the question is not
+ * "does anyone in my practice hold this" but "does anyone anywhere."
  */
 export async function deleteRoleAction(_previous: FormState, formData: FormData): Promise<FormState> {
   const { organizationId } = await adminOrganization();
@@ -190,32 +206,49 @@ export async function deleteRoleAction(_previous: FormState, formData: FormData)
 
   const supabase = await createClient();
 
-  const { count, error: countError } = await supabase
+  const { data: role, error: roleError } = await supabase
+    .from("roles")
+    .select("is_system")
+    .eq("id", roleId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (roleError) {
+    return failure("roles", roleError, "We could not delete that role just now. Please try again.");
+  }
+  if (!role) return { status: "error", message: "That role cannot be deleted." };
+
+  let holderQuery = supabase
     .from("user_roles")
     .select("user_id", { count: "exact", head: true })
     .eq("role_id", roleId)
-    .eq("organization_id", organizationId)
     .is("revoked_at", null);
+  if (!role.is_system) {
+    holderQuery = holderQuery.eq("organization_id", organizationId);
+  }
+  const { count, error: countError } = await holderQuery;
 
   if (countError) {
     return failure("roles", countError, "We could not delete that role just now. Please try again.");
   }
 
   if ((count ?? 0) > 0) {
+    const scope = role.is_system ? ", across every practice," : "";
     return {
       status: "error",
       message:
         count === 1
-          ? "One person still holds this role. Move them to another role first."
-          : `${count} people still hold this role. Move them to another role first.`,
+          ? `One person${scope} still holds this role. Move them to another role first.`
+          : `${count} people${scope} still hold this role. Move them to another role first.`,
     };
   }
 
+  // No organization_id filter: a system role's is null. The policy
+  // (roles_update, which also governs this soft delete) is the boundary.
   const { data, error } = await supabase
     .from("roles")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", roleId)
-    .eq("organization_id", organizationId)
     .is("deleted_at", null)
     .select("id")
     .maybeSingle();

@@ -22,28 +22,32 @@ let adminSession: Session;
 let rolelessSession: Session;
 let receptionSession: Session;
 let financeSession: Session;
+let labSession: Session;
 
 beforeAll(async () => {
-  const [clientEmail, doctorEmail, adminEmail, receptionEmail, financeEmail] = await Promise.all([
+  const [clientEmail, doctorEmail, adminEmail, receptionEmail, financeEmail, labEmail] = await Promise.all([
     createUser("client", "client"),
     createUser("doctor", "doctor"),
     createUser("admin", "admin"),
     createUser("reception", "receptionist"),
     createUser("finance", "finance_manager"),
+    createUser("lab", "lab"),
   ]);
 
   // Created without any role, which is what an administratively created
   // account looks like before access is granted.
   const { email: rolelessEmail } = await createUserWithRole(`route-norole-${RUN}`, null);
 
-  [clientSession, doctorSession, adminSession, rolelessSession, receptionSession, financeSession] = await Promise.all([
-    signIn(clientEmail),
-    signIn(doctorEmail),
-    signIn(adminEmail),
-    signIn(rolelessEmail),
-    signIn(receptionEmail),
-    signIn(financeEmail),
-  ]);
+  [clientSession, doctorSession, adminSession, rolelessSession, receptionSession, financeSession, labSession] =
+    await Promise.all([
+      signIn(clientEmail),
+      signIn(doctorEmail),
+      signIn(adminEmail),
+      signIn(rolelessEmail),
+      signIn(receptionEmail),
+      signIn(financeEmail),
+      signIn(labEmail),
+    ]);
 }, 120_000);
 
 describe("signed out", () => {
@@ -158,6 +162,53 @@ describe("administration stays administrators-only", () => {
     const html = await (await receptionSession.page("/admin")).text();
 
     expect(html).not.toContain("/admin/users");
+  });
+});
+
+/**
+ * The built-in roles carry real permission rows since 20261006000100, so that
+ * the Roles screen can describe them. Every page guard pairs a role check with
+ * a permission check, and if that permission check read the full union rather
+ * than a practice's own roles, those rows would silently become grants.
+ *
+ * These are the doors that would have opened. A doctor holds clients.view and
+ * clinical.view; a lab user holds appointments.view and clients.view; a
+ * finance manager holds services.view — each of which gates an area of /admin
+ * none of them reached before.
+ */
+describe("describing a built-in role does not grant it anything", () => {
+  it.each([
+    ["/admin", "doctor"],
+    ["/admin/vaccinations", "doctor"],
+    ["/admin/reports", "doctor"],
+  ])("still keeps a doctor out of %s", async (path) => {
+    const response = await doctorSession.get(path);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/no-access");
+  });
+
+  it.each(["/admin/doctors", "/admin/services", "/admin/vaccinations"])(
+    "still keeps a lab user out of %s",
+    async (path) => {
+      const response = await labSession.get(path);
+
+      expect(response.status).toBe(307);
+      expect(response.headers.get("location")).toContain("/no-access");
+    },
+  );
+
+  it.each(["/admin/doctors", "/admin/services"])("still keeps a finance manager out of %s", async (path) => {
+    const response = await financeSession.get(path);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/no-access");
+  });
+
+  it("leaves each narrower role its own area", async () => {
+    expect((await labSession.get("/admin/lab")).status).toBe(200);
+    expect((await financeSession.get("/admin/billing")).status).toBe(200);
+    expect((await receptionSession.get("/admin/appointments")).status).toBe(200);
   });
 });
 

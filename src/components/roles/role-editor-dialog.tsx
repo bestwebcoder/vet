@@ -26,12 +26,17 @@ import { idleState } from "@/lib/forms";
  * Creating a role, and editing one — the same form, because the two must agree
  * about what a role is.
  *
- * A system role opens here too, read-only — it is the same kind of object, and
- * hiding it would make the built-ins look like magic. The dialog says plainly
- * that the matrix does not describe them fully: what a receptionist or a lab
- * user may do is written into their own policies and does not decompose into
- * these modules, and pretending otherwise on screen is exactly the lie this
- * whole feature is trying not to tell.
+ * A system role opens here too, and is now fully editable: name, description
+ * and the permission matrix all save. The one thing that never changes, for
+ * any role, is its identity — slug, is_system and organization_id are fixed
+ * by a database trigger (20261007000100), not by this form.
+ *
+ * Built-in roles are shared by every practice on the platform — there is one
+ * Doctor row, not one per practice — so a change made here takes effect for
+ * every practice's doctors, not only this one. The matrix also still will not
+ * describe a narrower built-in role completely: some of what a receptionist
+ * or a lab user does is written into their own policies rather than a module
+ * here, so a short list on one of them is not the same as an empty job.
  */
 export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
   const [open, setOpen] = useState(false);
@@ -46,8 +51,8 @@ export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
 
   const trigger = role ? (
     <Button type="button" variant="outline" size="sm">
-      {isSystem ? "View" : <Pencil aria-hidden />}
-      {isSystem ? null : "Edit"}
+      <Pencil aria-hidden />
+      Edit
     </Button>
   ) : (
     <Button type="button" size="touch">
@@ -65,7 +70,7 @@ export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
           <DialogTitle>{role ? role.name : "New role"}</DialogTitle>
           <DialogDescription>
             {isSystem
-              ? "A built-in role. What it can do is written into the system and cannot be changed here — and for every one except Administrator, it does not decompose into these modules, so the matrix below will look emptier than the role is."
+              ? "A built-in role, shared by every practice on the platform. A change here takes effect for all of them, not only yours. Managing something always includes viewing it."
               : "Give the role a name, then tick what it may do. Managing something always includes viewing it."}
           </DialogDescription>
         </DialogHeader>
@@ -79,7 +84,6 @@ export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
             name="name"
             defaultValue={role?.name}
             required
-            disabled={isSystem}
             errors={state.status === "error" ? state.fieldErrors?.name : undefined}
           />
 
@@ -88,14 +92,13 @@ export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
             name="description"
             rows={2}
             defaultValue={role?.description ?? ""}
-            disabled={isSystem}
             hint="What this role is for, in the practice's own words."
           />
 
           <div className="grid gap-2">
             <span className="text-sm font-medium">Permissions</span>
             <div className="max-h-[45vh] overflow-y-auto pr-1">
-              <PermissionMatrix defaultPermissions={role?.permissions ?? []} disabled={isSystem} />
+              <PermissionMatrix defaultPermissions={role?.permissions ?? []} />
             </div>
           </div>
 
@@ -107,13 +110,11 @@ export function RoleEditorDialog({ role }: { role?: RoleSummary }) {
               className="w-full sm:w-auto"
               onClick={() => setOpen(false)}
             >
-              {isSystem ? "Close" : "Cancel"}
+              Cancel
             </Button>
-            {isSystem ? null : (
-              <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">
-                {role ? "Save role" : "Create role"}
-              </SubmitButton>
-            )}
+            <SubmitButton pendingLabel="Saving…" className="w-full sm:w-auto">
+              {role ? "Save role" : "Create role"}
+            </SubmitButton>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -83,6 +83,20 @@ export type SessionUser = {
    * organization, and only they are the boundary.
    */
   permissions: string[];
+  /**
+   * The subset of `permissions` granted through a role this practice defined
+   * itself.
+   *
+   * The built-in roles carry permission rows too (20261006000100), so that the
+   * Roles screen can describe them instead of saying "defined in the system".
+   * Those rows restate access those roles already had — but the permission
+   * checks beside every `hasRole` check were written as the way a CUSTOM role
+   * reaches a page, and reading the full union there would have turned an
+   * accurate description into a grant: every doctor holding `clients.view`
+   * would suddenly reach the administration area. So reachability asks this,
+   * and only this.
+   */
+  customPermissions: string[];
   organizationIds: string[];
 };
 
@@ -105,7 +119,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     supabase.from("users").select("full_name, email, phone, avatar_url").eq("id", userId).single(),
     supabase
       .from("user_roles")
-      .select("organization_id, roles(slug, deleted_at, role_permissions(permission_key))")
+      .select("organization_id, roles(slug, deleted_at, is_system, role_permissions(permission_key))")
       .eq("user_id", userId)
       .is("revoked_at", null),
   ]);
@@ -124,9 +138,11 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     .map((role) => role.slug as RoleSlug | undefined)
     .filter((slug): slug is RoleSlug => slug !== undefined && KNOWN_ROLES.includes(slug));
 
-  const permissions = grantedRoles.flatMap((role) =>
-    (role.role_permissions ?? []).map((entry) => entry.permission_key as string),
-  );
+  const permissionsFrom = (roles: typeof grantedRoles) =>
+    roles.flatMap((role) => (role.role_permissions ?? []).map((entry) => entry.permission_key as string));
+
+  const permissions = permissionsFrom(grantedRoles);
+  const customPermissions = permissionsFrom(grantedRoles.filter((role) => !role.is_system));
 
   return {
     id: userId,
@@ -136,6 +152,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     avatarUrl: profile.avatar_url,
     roles: [...new Set(roles)],
     permissions: [...new Set(permissions)],
+    customPermissions: [...new Set(customPermissions)],
     organizationIds: [...new Set((grants ?? []).map((grant) => grant.organization_id))],
   };
 });
@@ -161,6 +178,21 @@ export function hasPermission(user: SessionUser, ...keys: string[]): boolean {
 }
 
 /**
+ * The reachability question: whether a role this practice defined itself
+ * carries any of these permissions.
+ *
+ * Every place that opens a page on a permission sits beside a `hasRole` check
+ * that already admits the built-in roles by name. Asking the full union there
+ * would double-count them — and since 20261006000100 gave the built-ins their
+ * real permission rows, it would also hand the administration area to every
+ * doctor. What is left for a permission to decide is the case the permission
+ * model was added for: a practice's own "Nurse".
+ */
+export function hasCustomRolePermission(user: SessionUser, ...keys: string[]): boolean {
+  return keys.some((key) => user.customPermissions.includes(key));
+}
+
+/**
  * Requires one of these permissions to reach a page.
  *
  * The counterpart to requireRole, and the one to prefer: a page guarded this
@@ -170,7 +202,7 @@ export function hasPermission(user: SessionUser, ...keys: string[]): boolean {
 export async function requirePermission(...keys: string[]): Promise<SessionUser> {
   const user = await requireUser();
 
-  if (!hasPermission(user, ...keys)) {
+  if (!hasCustomRolePermission(user, ...keys)) {
     redirect("/no-access");
   }
 
