@@ -1,14 +1,13 @@
 import type { NextRequest } from "next/server";
 
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { getRevenueByDoctor, getRevenueByService, getRevenueSeries, getRevenueTotals } from "@/features/reports/queries";
 import { formatCurrency } from "@/lib/currency";
 import { reportExportResponse } from "@/lib/report-export";
 import { readDateRange } from "@/lib/validation/date-range";
 
 export async function GET(request: NextRequest) {
-  const user = await requireRole(...ACCESS.finance);
+  const user = await requireAccess("finance");
   const { searchParams } = new URL(request.url);
   const range = readDateRange(Object.fromEntries(searchParams));
   const organizationId = user.organizationIds[0];

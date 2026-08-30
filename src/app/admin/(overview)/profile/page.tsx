@@ -3,13 +3,12 @@ import type { Metadata } from "next";
 import { AccountInfoCard } from "@/components/profile/account-info-card";
 import { AvatarUploadCard } from "@/components/profile/avatar-upload-card";
 import { ChangePasswordCard } from "@/components/profile/change-password-card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 
 export const metadata: Metadata = { title: "My profile · TV Care" };
 
 export default async function AdminProfilePage() {
-  const user = await requireRole(...ACCESS.shared);
+  const user = await requireAccess("shared");
 
   return (
     <div className="mx-auto grid w-full max-w-xl gap-6">

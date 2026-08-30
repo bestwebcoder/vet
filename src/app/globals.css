@@ -29,6 +29,16 @@
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
+
+  /* Public-site only; see the marketing palette below. */
+  --color-marketing-forest: var(--marketing-forest);
+  --color-marketing-grove: var(--marketing-grove);
+  --color-marketing-parchment: var(--marketing-parchment);
+  --color-marketing-gold: var(--marketing-gold);
+  --color-marketing-gold-light: var(--marketing-gold-light);
+  --color-marketing-rule: var(--marketing-rule);
+  --color-marketing-quiet: var(--marketing-quiet);
+  --font-display: var(--font-display), Georgia, serif;
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -91,6 +101,29 @@
   --sidebar-accent-foreground: oklch(0.32 0.043 152);
   --sidebar-border: oklch(0.9 0.008 100);
   --sidebar-ring: oklch(0.62 0.07 152);
+
+  /* ---------------------------------------------------------------------
+     Marketing palette — the public site only.
+     ---------------------------------------------------------------------
+     A deeper, warmer take on the same sage family the application uses: a
+     forest ground for the full-bleed bands, and gold for the rules and
+     eyebrows that carry the "premium, calm, trustworthy" of CLAUDE.md §7.
+
+     Deliberately additive. The clinical interface — every /admin, /doctor and
+     /client screen — keeps the tokens above untouched: a records system read
+     all day wants the quiet palette, and a marketing page introducing the
+     practice wants presence. Two jobs, two treatments, one family.
+
+     These are fixed values rather than theme-aware ones: the public pages are
+     a brand statement and read the same in either mode, the way a printed
+     leaflet does. */
+  --marketing-forest: oklch(0.28 0.038 158);
+  --marketing-grove: oklch(0.38 0.052 154);
+  --marketing-parchment: oklch(0.975 0.008 92);
+  --marketing-gold: oklch(0.68 0.098 82);
+  --marketing-gold-light: oklch(0.78 0.082 84);
+  --marketing-rule: oklch(0.86 0.012 92);
+  --marketing-quiet: oklch(0.56 0.014 100);
 }
 
 .dark {

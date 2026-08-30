@@ -5,8 +5,7 @@ import { ServiceCategoryManager } from "@/components/services/service-category-m
 import { ServiceManager } from "@/components/services/service-form";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listAllCategories } from "@/features/service-categories/queries";
 import { listServicesPage } from "@/features/services/queries";
 
@@ -16,7 +15,7 @@ export const metadata: Metadata = { title: "Services · TV Care" };
 const CATEGORY_PAGE_SIZE = 20;
 
 export default async function AdminServicesPage({ searchParams }: PageProps<"/admin/services">) {
-  await requireRole(...ACCESS.reception);
+  await requireAccess("reception");
 
   const params = await searchParams;
   const page = typeof params.page === "string" ? Number(params.page) || 1 : 1;

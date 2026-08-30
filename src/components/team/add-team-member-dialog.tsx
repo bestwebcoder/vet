@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
 
-import { InviteTeamMemberForm } from "@/components/team/invite-team-member-form";
+import { AddTeamMemberForm } from "@/components/team/add-team-member-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import type { RoleOption } from "@/lib/validation/team";
 
-export function InviteTeamMemberDialog() {
+export function AddTeamMemberDialog({ roles }: { roles: RoleOption[] }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -20,12 +21,12 @@ export function InviteTeamMemberDialog() {
         <DialogHeader>
           <DialogTitle>Add a user</DialogTitle>
           <DialogDescription>
-            They receive an email to set their own password. Their role decides what they can reach once they sign
-            in, and can be changed at any time.
+            The account works as soon as you save — no invitation to wait for. Set a first password and pass it on;
+            their role decides what they can reach, and can be changed at any time.
           </DialogDescription>
         </DialogHeader>
 
-        <InviteTeamMemberForm onDone={() => setOpen(false)} />
+        <AddTeamMemberForm roles={roles} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );

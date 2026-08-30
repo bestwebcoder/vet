@@ -6,8 +6,7 @@ import { BookingForm } from "@/components/appointments/booking-form";
 import { EmptyState } from "@/components/states/empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listDoctors } from "@/features/doctors/queries";
 import { getPet } from "@/features/pets/queries";
 import { listServices } from "@/features/services/queries";
@@ -17,7 +16,7 @@ export const metadata: Metadata = { title: "Book an appointment · TV Care" };
 export default async function NewAdminAppointmentPage({
   searchParams,
 }: PageProps<"/admin/appointments/new">) {
-  await requireRole(...ACCESS.reception);
+  await requireAccess("reception");
   const { petId } = await searchParams;
 
   const pet = typeof petId === "string" ? await getPet(petId) : null;

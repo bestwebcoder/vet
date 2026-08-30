@@ -110,6 +110,7 @@ CREATE OR REPLACE FUNCTION "public"."can_view_user"("p_user_id" "uuid") RETURNS 
         and (
           public.is_admin(ur.organization_id)
           or public.is_doctor(ur.organization_id)
+          or public.is_support_staff(ur.organization_id)
         )
     )
     -- Anyone in the organization may see that organization's doctors, which
@@ -427,6 +428,49 @@ $$;
 ALTER FUNCTION "public"."guard_issued_invoice_items"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."guard_refund_amount"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_payment record;
+  v_already integer;
+begin
+  select p.amount_paisa, p.invoice_id, p.organization_id, p.status
+    into v_payment
+    from public.payments p
+   where p.id = new.payment_id;
+
+  if not found then
+    raise exception 'That payment could not be found.';
+  end if;
+
+  if v_payment.status <> 'completed' then
+    raise exception 'Only a completed payment can be refunded.';
+  end if;
+
+  if new.invoice_id <> v_payment.invoice_id or new.organization_id <> v_payment.organization_id then
+    raise exception 'A refund must belong to the same invoice and practice as its payment.';
+  end if;
+
+  select coalesce(sum(r.amount_paisa), 0)
+    into v_already
+    from public.refunds r
+   where r.payment_id = new.payment_id
+     and r.id <> new.id;
+
+  if v_already + new.amount_paisa > v_payment.amount_paisa then
+    raise exception 'A payment cannot be refunded for more than it was taken for.';
+  end if;
+
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."guard_refund_amount"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -580,6 +624,39 @@ $$;
 ALTER FUNCTION "public"."is_doctor"("p_organization_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."is_finance_manager"("p_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select public.has_role('finance_manager', p_organization_id);
+$$;
+
+
+ALTER FUNCTION "public"."is_finance_manager"("p_organization_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_financial_report_viewer"("p_organization_id" "uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select public.is_report_viewer(p_organization_id) or public.is_finance_manager(p_organization_id);
+$$;
+
+
+ALTER FUNCTION "public"."is_financial_report_viewer"("p_organization_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."is_lab"("p_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select public.has_role('lab', p_organization_id);
+$$;
+
+
+ALTER FUNCTION "public"."is_lab"("p_organization_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."is_org_member"("p_organization_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -599,6 +676,17 @@ ALTER FUNCTION "public"."is_org_member"("p_organization_id" "uuid") OWNER TO "po
 
 COMMENT ON FUNCTION "public"."is_org_member"("p_organization_id" "uuid") IS 'True when the caller holds any active role in the organization.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."is_receptionist"("p_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select public.has_role('receptionist', p_organization_id);
+$$;
+
+
+ALTER FUNCTION "public"."is_receptionist"("p_organization_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."is_report_viewer"("p_organization_id" "uuid") RETURNS boolean
@@ -631,6 +719,20 @@ $$;
 ALTER FUNCTION "public"."is_super_admin"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."is_support_staff"("p_organization_id" "uuid" DEFAULT NULL::"uuid") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select
+    public.has_role('finance_manager', p_organization_id)
+    or public.has_role('lab', p_organization_id)
+    or public.has_role('receptionist', p_organization_id);
+$$;
+
+
+ALTER FUNCTION "public"."is_support_staff"("p_organization_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."may_client_change_appointment"("p_starts_at" timestamp with time zone, "p_organization_id" "uuid") RETURNS boolean
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -647,6 +749,62 @@ $$;
 
 
 ALTER FUNCTION "public"."may_client_change_appointment"("p_starts_at" timestamp with time zone, "p_organization_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."my_member_org_ids"() RETURNS SETOF "uuid"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select distinct ur.organization_id
+  from public.user_roles ur
+  where ur.user_id = (select auth.uid())
+    and ur.revoked_at is null;
+$$;
+
+
+ALTER FUNCTION "public"."my_member_org_ids"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) RETURNS SETOF "uuid"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select distinct ur.organization_id
+  from public.user_roles ur
+  join public.roles r on r.id = ur.role_id
+  where ur.user_id = (select auth.uid())
+    and ur.revoked_at is null
+    and r.slug = any (p_slugs);
+$$;
+
+
+ALTER FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) IS 'The organizations the caller holds any of these roles in. Written for
+   `organization_id in (select public.my_org_ids(...))`, which Postgres runs
+   once per statement rather than once per row.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."nav_menu_items_enforce_depth"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+declare
+  parent_of_parent uuid;
+begin
+  if new.parent_id is not null then
+    select parent_id into parent_of_parent from public.nav_menu_items where id = new.parent_id;
+    if parent_of_parent is not null then
+      raise exception 'nav_menu_items only supports two levels — % is already a child item', new.parent_id;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."nav_menu_items_enforce_depth"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."notify_appointment_confirmed"() RETURNS "trigger"
@@ -885,6 +1043,114 @@ $$;
 ALTER FUNCTION "public"."pet_id_from_object_path"("p_name" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "public"."provision_organization"("p_organization_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  insert into public.service_categories (organization_id, name, sort_order)
+  select p_organization_id, category.name, category.sort_order
+  from (values
+    ('Consultation', 10), ('Follow-up', 20), ('Home visit', 30), ('Vaccination', 40),
+    ('Deworming', 50), ('Surgery', 60), ('Diagnostic test', 70), ('Procedure', 80),
+    ('Medicine', 90), ('Other services', 100)
+  ) as category(name, sort_order)
+  where not exists (
+    select 1 from public.service_categories t where t.organization_id = p_organization_id
+  );
+
+  insert into public.services (organization_id, name, description, duration_minutes, sort_order)
+  select p_organization_id, service.name, service.description, service.duration, service.sort_order
+  from (values
+    ('General consultation', 'Routine examination and advice.', 30, 10),
+    ('Follow-up consultation', 'Review of an ongoing problem.', 20, 20),
+    ('Vaccination', 'Scheduled or catch-up vaccination.', 15, 30),
+    ('Deworming', 'Routine parasite treatment.', 15, 40),
+    ('Emergency consultation', 'Urgent, same-day assessment.', 45, 50),
+    ('Surgery', 'Planned surgical procedure.', 90, 60),
+    ('Home visit consultation', 'Examination at the client''s address.', 60, 70)
+  ) as service(name, description, duration, sort_order)
+  where not exists (
+    select 1 from public.services t where t.organization_id = p_organization_id
+  );
+
+  insert into public.vaccination_schedules
+    (organization_id, species_id, vaccine_name, interval_value, interval_unit, description, sort_order)
+  select p_organization_id, s.id, schedule.vaccine_name, schedule.interval_value, schedule.interval_unit,
+         schedule.description, schedule.sort_order
+  from (values
+    ('DHPP', 'dog', 12, 'months', 'Distemper, hepatitis, parainfluenza, parvovirus.', 10),
+    ('Rabies', 'dog', 12, 'months', 'Required for licensing in most areas.', 20),
+    ('Bordetella', 'dog', 6, 'months', 'Kennel cough, recommended for boarding/grooming.', 30),
+    ('FVRCP', 'cat', 12, 'months', 'Feline viral rhinotracheitis, calicivirus, panleukopenia.', 40),
+    ('Rabies', 'cat', 12, 'months', 'Required for licensing in most areas.', 50)
+  ) as schedule(vaccine_name, species_slug, interval_value, interval_unit, description, sort_order)
+  join public.species s on s.slug = schedule.species_slug
+  where not exists (
+    select 1 from public.vaccination_schedules t where t.organization_id = p_organization_id
+  );
+
+  insert into public.nav_menu_items (organization_id, label, href, position)
+  select p_organization_id, link.label, link.href, link.position
+  from (values
+    ('Home', '/', 0), ('About Us', '/about', 1), ('Services', '/services', 2),
+    ('Doctors', '/doctors', 3), ('Contact Us', '/contact', 4)
+  ) as link(label, href, position)
+  where not exists (
+    select 1 from public.nav_menu_items t where t.organization_id = p_organization_id
+  );
+
+  insert into public.page_section_items (organization_id, page, section, position, icon, title, description)
+  select p_organization_id, item.page, item.section, item.position, item.icon, item.title, item.description
+  from (values
+    ('home', 'services', 0, 'stethoscope', 'Clinic visits', 'Book a consultation at the practice with the doctor of your choice.'),
+    ('home', 'services', 1, 'home', 'Home visits', 'Prefer your pet stay comfortable at home? We come to you.'),
+    ('home', 'services', 2, 'syringe', 'Vaccinations & deworming', 'Every dose recorded, with the next one scheduled automatically.'),
+    ('home', 'services', 3, 'file-text', 'Digital prescriptions', 'Clear, dosed prescriptions you can find again whenever you need them.'),
+    ('home', 'why', 0, 'paw-print', 'One record, always up to date', 'Every visit, vaccination and prescription for your pet lives in one place, not a stack of paper.'),
+    ('home', 'why', 1, 'bell', 'Reminders that keep up', 'Vaccination and deworming due dates are tracked for you, and a reminder goes out before they''re due.'),
+    ('home', 'why', 2, 'receipt', 'Transparent billing', 'Itemized invoices with clear totals, and a record of every payment against them.'),
+    ('home', 'why', 3, 'shield-check', 'Built for your privacy', 'Role-based access means your pet''s records are visible only to you and your care team.'),
+    ('home', 'how_it_works', 0, null, 'Create an account', 'Sign up and add your pet''s basic details.'),
+    ('home', 'how_it_works', 1, null, 'Book an appointment', 'Choose a doctor, a time, and clinic or home visit.'),
+    ('home', 'how_it_works', 2, null, 'Get the full picture', 'SOAP notes, prescriptions and invoices, all in your account afterward.'),
+    ('about', 'values', 0, 'stethoscope', 'Veterinarian-led care', 'Every diagnosis, prescription and treatment plan is made by the attending veterinarian — never automated.'),
+    ('about', 'values', 1, 'map-pin', 'Wherever your pet is comfortable', 'A consultation at the practice, or a visit at home — the same doctors, the same standard of care.'),
+    ('about', 'values', 2, 'heart', 'A record that stays with you', 'Every visit, vaccination and prescription is kept in one place, so nothing is lost between appointments.'),
+    ('services', 'highlights', 0, 'stethoscope', 'Clinic or home visit', 'Most services can be booked at the practice or as a home visit — the price shown is for the service itself, with any home-visit fee added separately.'),
+    ('services', 'highlights', 1, 'receipt', 'The price you see', 'Every service is listed with its current price and how long to allow. Nothing is estimated: the invoice is built from these same figures.'),
+    ('services', 'highlights', 2, 'file-text', 'Everything recorded', 'Whatever your pet is seen for, the assessment, any prescription and the invoice are kept in your account afterward.')
+  ) as item(page, section, position, icon, title, description)
+  where not exists (
+    select 1 from public.page_section_items t where t.organization_id = p_organization_id
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "public"."provision_organization"("p_organization_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."provision_organization"("p_organization_id" "uuid") IS 'Gives a newly created practice the reference data every screen expects.
+   Add a new per-organization default here rather than as a one-off seed, or
+   the next practice created will be missing it.';
+
+
+
+CREATE OR REPLACE FUNCTION "public"."provision_organization_on_insert"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  perform public.provision_organization(new.id);
+  return new;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."provision_organization_on_insert"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "public"."recalculate_invoice_totals"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -896,10 +1162,8 @@ declare
   v_discount integer;
   v_total integer;
   v_paid integer;
+  v_refunded integer;
 begin
-  -- NEW/OLD are generic records here, so a field that does not exist on the
-  -- triggering table's row type cannot even be referenced, let alone
-  -- coalesced — invoices has no invoice_id column, only id.
   if tg_table_name = 'invoices' then
     v_invoice_id := coalesce(new.id, old.id);
   else
@@ -919,6 +1183,12 @@ begin
     from public.payments
    where invoice_id = v_invoice_id and status = 'completed';
 
+  select coalesce(sum(amount_paisa), 0) into v_refunded
+    from public.refunds
+   where invoice_id = v_invoice_id;
+
+  v_paid := v_paid - v_refunded;
+
   update public.invoices
      set subtotal_paisa = v_subtotal,
          tax_paisa = v_tax,
@@ -926,7 +1196,10 @@ begin
          amount_paid_paisa = v_paid,
          balance_paisa = v_total - v_paid,
          status = case
-           when status in ('cancelled', 'refunded') then status
+           when status = 'cancelled' then status
+           -- Everything collected has gone back out again.
+           when v_refunded > 0 and v_paid <= 0 then 'refunded'
+           when status = 'refunded' then status
            when v_total > 0 and v_paid >= v_total then 'paid'
            when v_paid > 0 and v_paid < v_total then 'partially_paid'
            when status = 'partially_paid' and v_paid = 0 then 'issued'
@@ -953,6 +1226,57 @@ $$;
 
 
 ALTER FUNCTION "public"."reject_audit_log_mutation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reject_table_mutation"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    AS $$
+begin
+  raise exception '%.% is append-only; % is not permitted', tg_table_schema, tg_table_name, tg_op
+    using errcode = '42501';
+end;
+$$;
+
+
+ALTER FUNCTION "public"."reject_table_mutation"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "public"."reorder_nav_menu_items"("p_organization_id" "uuid", "p_tree" "jsonb") RETURNS "void"
+    LANGUAGE "plpgsql"
+    AS $$
+declare
+  top_item jsonb;
+  child_item jsonb;
+  top_position integer := 0;
+  child_position integer;
+begin
+  if not public.is_admin(p_organization_id) then
+    raise exception 'not authorized';
+  end if;
+
+  for top_item in select * from jsonb_array_elements(p_tree)
+  loop
+    update public.nav_menu_items
+    set parent_id = null, position = top_position
+    where id = (top_item ->> 'id')::uuid and organization_id = p_organization_id;
+
+    child_position := 0;
+    for child_item in select * from jsonb_array_elements(coalesce(top_item -> 'children', '[]'::jsonb))
+    loop
+      update public.nav_menu_items
+      set parent_id = (top_item ->> 'id')::uuid, position = child_position
+      where id = (child_item ->> 'id')::uuid and organization_id = p_organization_id;
+
+      child_position := child_position + 1;
+    end loop;
+
+    top_position := top_position + 1;
+  end loop;
+end;
+$$;
+
+
+ALTER FUNCTION "public"."reorder_nav_menu_items"("p_organization_id" "uuid", "p_tree" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."report_client_summary"("p_organization_id" "uuid", "p_from" "date", "p_to" "date") RETURNS TABLE("new_clients" bigint, "returning_clients" bigint, "active_clients" bigint)
@@ -1103,7 +1427,7 @@ CREATE OR REPLACE FUNCTION "public"."report_revenue_by_doctor"("p_organization_i
     SET "search_path" TO ''
     AS $$
 begin
-  if not public.is_report_viewer(p_organization_id) then
+  if not public.is_financial_report_viewer(p_organization_id) then
     raise exception 'You do not have access to reports.';
   end if;
 
@@ -1131,7 +1455,7 @@ CREATE OR REPLACE FUNCTION "public"."report_revenue_by_service"("p_organization_
     SET "search_path" TO ''
     AS $$
 begin
-  if not public.is_report_viewer(p_organization_id) then
+  if not public.is_financial_report_viewer(p_organization_id) then
     raise exception 'You do not have access to reports.';
   end if;
 
@@ -1158,7 +1482,7 @@ CREATE OR REPLACE FUNCTION "public"."report_revenue_series"("p_organization_id" 
     SET "search_path" TO ''
     AS $$
 begin
-  if not public.is_report_viewer(p_organization_id) then
+  if not public.is_financial_report_viewer(p_organization_id) then
     raise exception 'You do not have access to reports.';
   end if;
 
@@ -1167,14 +1491,21 @@ begin
   end if;
 
   return query
-  select date_trunc(p_granularity, p.paid_at)::date as period_start,
-         coalesce(sum(p.amount_paisa), 0)::bigint as revenue_paisa
-  from public.payments p
-  where p.organization_id = p_organization_id
-    and p.status = 'completed'
-    and p.paid_at::date between p_from and p_to
-  group by 1
-  order by 1;
+  select bucket::date as period_start, sum(amount)::bigint as revenue_paisa
+  from (
+    select date_trunc(p_granularity, p.paid_at) as bucket, p.amount_paisa as amount
+    from public.payments p
+    where p.organization_id = p_organization_id
+      and p.status = 'completed'
+      and p.paid_at::date between p_from and p_to
+    union all
+    select date_trunc(p_granularity, r.refunded_at), -r.amount_paisa
+    from public.refunds r
+    where r.organization_id = p_organization_id
+      and r.refunded_at::date between p_from and p_to
+  ) as movements(bucket, amount)
+  group by bucket
+  order by bucket;
 end;
 $$;
 
@@ -1187,7 +1518,7 @@ CREATE OR REPLACE FUNCTION "public"."report_revenue_totals"("p_organization_id" 
     SET "search_path" TO ''
     AS $$
 begin
-  if not public.is_report_viewer(p_organization_id) then
+  if not public.is_financial_report_viewer(p_organization_id) then
     raise exception 'You do not have access to reports.';
   end if;
 
@@ -1321,6 +1652,39 @@ COMMENT ON FUNCTION "public"."revise_soap_record"("p_soap_record_id" "uuid") IS 
    are subject to the normal soap_records RLS policies, so this only ever
    succeeds for someone who could already do the equivalent writes by hand.';
 
+
+
+CREATE OR REPLACE FUNCTION "public"."set_primary_branch"("p_branch_id" "uuid") RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_organization_id uuid;
+begin
+  select organization_id into v_organization_id
+  from public.branches
+  where id = p_branch_id and deleted_at is null;
+
+  if v_organization_id is null then
+    raise exception 'That branch could not be found.';
+  end if;
+
+  -- Authorization is the caller's, not this function's: security definer would
+  -- otherwise let anyone who can execute it repoint another practice's branches.
+  if not ((select public.is_super_admin()) or public.is_admin(v_organization_id)) then
+    raise exception 'You do not have access to manage this practice''s branches.';
+  end if;
+
+  update public.branches
+     set is_primary = (id = p_branch_id)
+   where organization_id = v_organization_id
+     and deleted_at is null
+     and is_primary is distinct from (id = p_branch_id);
+end;
+$$;
+
+
+ALTER FUNCTION "public"."set_primary_branch"("p_branch_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."set_updated_at"() RETURNS "trigger"
@@ -1601,6 +1965,54 @@ CREATE TABLE IF NOT EXISTS "public"."contact_messages" (
 ALTER TABLE "public"."contact_messages" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."data_exports" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "actor_user_id" "uuid",
+    "tables" "jsonb" DEFAULT '[]'::"jsonb" NOT NULL,
+    "row_count" integer DEFAULT 0 NOT NULL,
+    "byte_size" bigint DEFAULT 0 NOT NULL,
+    "checksum" "text" NOT NULL,
+    "included_audit" boolean DEFAULT false NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "data_exports_byte_size_not_negative" CHECK (("byte_size" >= 0)),
+    CONSTRAINT "data_exports_checksum_shape" CHECK (("checksum" ~ '^[0-9a-f]{64}$'::"text")),
+    CONSTRAINT "data_exports_row_count_not_negative" CHECK (("row_count" >= 0))
+);
+
+
+ALTER TABLE "public"."data_exports" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."data_exports" IS 'One row per practice data snapshot downloaded. Append-only. The archive
+   itself is never stored — only proof of what it contained.';
+
+
+
+CREATE TABLE IF NOT EXISTS "public"."data_imports" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "actor_user_id" "uuid",
+    "target" "text" NOT NULL,
+    "file_name" "text" NOT NULL,
+    "rows_total" integer DEFAULT 0 NOT NULL,
+    "rows_imported" integer DEFAULT 0 NOT NULL,
+    "rows_skipped" integer DEFAULT 0 NOT NULL,
+    "rows_failed" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "data_imports_counts_not_negative" CHECK ((("rows_total" >= 0) AND ("rows_imported" >= 0) AND ("rows_skipped" >= 0) AND ("rows_failed" >= 0))),
+    CONSTRAINT "data_imports_target_not_blank" CHECK (("length"("btrim"("target")) > 0))
+);
+
+
+ALTER TABLE "public"."data_imports" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "public"."data_imports" IS 'One row per import run. Imports only ever add rows — see
+   src/features/data/import.ts — so this is the record of what arrived.';
+
+
+
 CREATE TABLE IF NOT EXISTS "public"."deworming_records" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "appointment_id" "uuid" NOT NULL,
@@ -1840,6 +2252,25 @@ CREATE TABLE IF NOT EXISTS "public"."medications" (
 ALTER TABLE "public"."medications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."nav_menu_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "parent_id" "uuid",
+    "label" "text" NOT NULL,
+    "href" "text" NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL,
+    "is_visible" boolean DEFAULT true NOT NULL,
+    "opens_new_tab" boolean DEFAULT false NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "nav_menu_items_href_not_blank" CHECK (("length"("btrim"("href")) > 0)),
+    CONSTRAINT "nav_menu_items_label_not_blank" CHECK (("length"("btrim"("label")) > 0))
+);
+
+
+ALTER TABLE "public"."nav_menu_items" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."notification_logs" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "notification_id" "uuid" NOT NULL,
@@ -1928,7 +2359,9 @@ CREATE TABLE IF NOT EXISTS "public"."organization_hero_images" (
     "organization_id" "uuid" NOT NULL,
     "image_path" "text" NOT NULL,
     "position" integer DEFAULT 0 NOT NULL,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "caption" "text",
+    CONSTRAINT "organization_hero_images_caption_length" CHECK (("char_length"("caption") <= 160))
 );
 
 
@@ -1957,6 +2390,7 @@ CREATE TABLE IF NOT EXISTS "public"."organizations" (
     "hero_image_path" "text",
     "whatsapp_number" "text",
     "logo_path" "text",
+    "footer_show_logo" boolean DEFAULT true NOT NULL,
     CONSTRAINT "organizations_cancellation_notice_sane" CHECK ((("cancellation_notice_hours" >= 0) AND ("cancellation_notice_hours" <= 168))),
     CONSTRAINT "organizations_name_not_blank" CHECK (("length"("btrim"("name")) > 0)),
     CONSTRAINT "organizations_slug_format" CHECK (("slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::"text"))
@@ -1973,6 +2407,28 @@ COMMENT ON TABLE "public"."organizations" IS 'Top of the tenancy hierarchy: Orga
 COMMENT ON COLUMN "public"."organizations"."cancellation_notice_hours" IS 'How long before an appointment a client may still change it themselves. A
    business decision, so it is configuration rather than a constant in code.';
 
+
+
+CREATE TABLE IF NOT EXISTS "public"."page_section_items" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "section" "text" NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL,
+    "icon" "text",
+    "title" "text" NOT NULL,
+    "description" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "page" "text" DEFAULT 'home'::"text" NOT NULL,
+    "image_path" "text",
+    CONSTRAINT "page_section_items_description_not_blank" CHECK (("length"("btrim"("description")) > 0)),
+    CONSTRAINT "page_section_items_page_allowed" CHECK (("page" = ANY (ARRAY['home'::"text", 'about'::"text", 'services'::"text", 'contact'::"text"]))),
+    CONSTRAINT "page_section_items_section_allowed" CHECK (("section" = ANY (ARRAY['services'::"text", 'why'::"text", 'how_it_works'::"text", 'values'::"text", 'highlights'::"text", 'points'::"text"]))),
+    CONSTRAINT "page_section_items_title_not_blank" CHECK (("length"("btrim"("title")) > 0))
+);
+
+
+ALTER TABLE "public"."page_section_items" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."payments" (
@@ -2180,6 +2636,27 @@ CREATE TABLE IF NOT EXISTS "public"."push_subscriptions" (
 ALTER TABLE "public"."push_subscriptions" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."refunds" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "payment_id" "uuid" NOT NULL,
+    "invoice_id" "uuid" NOT NULL,
+    "organization_id" "uuid" NOT NULL,
+    "amount_paisa" integer NOT NULL,
+    "method" "text" NOT NULL,
+    "reason" "text" NOT NULL,
+    "reference_number" "text",
+    "refunded_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "recorded_by" "uuid",
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "refunds_amount_positive" CHECK (("amount_paisa" > 0)),
+    CONSTRAINT "refunds_method_allowed" CHECK (("method" = ANY (ARRAY['cash'::"text", 'bank_transfer'::"text", 'bkash'::"text", 'nagad'::"text", 'card'::"text", 'other'::"text"]))),
+    CONSTRAINT "refunds_reason_not_blank" CHECK (("length"("btrim"("reason")) > 0))
+);
+
+
+ALTER TABLE "public"."refunds" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."roles" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "slug" "text" NOT NULL,
@@ -2187,7 +2664,7 @@ CREATE TABLE IF NOT EXISTS "public"."roles" (
     "description" "text",
     "is_assignable_in_ui" boolean DEFAULT true NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "roles_slug_allowed" CHECK (("slug" = ANY (ARRAY['client'::"text", 'doctor'::"text", 'admin'::"text", 'super_admin'::"text"])))
+    CONSTRAINT "roles_slug_allowed" CHECK (("slug" = ANY (ARRAY['client'::"text", 'doctor'::"text", 'admin'::"text", 'super_admin'::"text", 'finance_manager'::"text", 'lab'::"text", 'receptionist'::"text"])))
 );
 
 
@@ -2262,7 +2739,7 @@ CREATE TABLE IF NOT EXISTS "public"."site_page_blocks" (
     "content" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    CONSTRAINT "site_page_blocks_type_allowed" CHECK (("block_type" = ANY (ARRAY['text'::"text", 'image'::"text", 'section'::"text", 'columns'::"text"])))
+    CONSTRAINT "site_page_blocks_type_allowed" CHECK (("block_type" = ANY (ARRAY['text'::"text", 'image'::"text", 'section'::"text", 'columns'::"text", 'cards'::"text"])))
 );
 
 
@@ -2504,6 +2981,16 @@ ALTER TABLE ONLY "public"."contact_messages"
 
 
 
+ALTER TABLE ONLY "public"."data_exports"
+    ADD CONSTRAINT "data_exports_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."data_imports"
+    ADD CONSTRAINT "data_imports_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."deworming_records"
     ADD CONSTRAINT "deworming_records_pkey" PRIMARY KEY ("id");
 
@@ -2559,6 +3046,11 @@ ALTER TABLE ONLY "public"."medications"
 
 
 
+ALTER TABLE ONLY "public"."nav_menu_items"
+    ADD CONSTRAINT "nav_menu_items_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."notification_logs"
     ADD CONSTRAINT "notification_logs_pkey" PRIMARY KEY ("id");
 
@@ -2589,6 +3081,11 @@ ALTER TABLE ONLY "public"."organizations"
 
 
 
+ALTER TABLE ONLY "public"."page_section_items"
+    ADD CONSTRAINT "page_section_items_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "public"."payments"
     ADD CONSTRAINT "payments_pkey" PRIMARY KEY ("id");
 
@@ -2611,6 +3108,11 @@ ALTER TABLE ONLY "public"."prescriptions"
 
 ALTER TABLE ONLY "public"."push_subscriptions"
     ADD CONSTRAINT "push_subscriptions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."refunds"
+    ADD CONSTRAINT "refunds_pkey" PRIMARY KEY ("id");
 
 
 
@@ -2735,6 +3237,10 @@ CREATE INDEX "audit_logs_organization_id_created_at_idx" ON "public"."audit_logs
 
 
 
+CREATE INDEX "audit_logs_organization_id_id_idx" ON "public"."audit_logs" USING "btree" ("organization_id", "id");
+
+
+
 CREATE UNIQUE INDEX "branches_one_primary_per_organization" ON "public"."branches" USING "btree" ("organization_id") WHERE ("is_primary" AND ("deleted_at" IS NULL));
 
 
@@ -2787,6 +3293,14 @@ CREATE INDEX "contact_messages_status_idx" ON "public"."contact_messages" USING 
 
 
 
+CREATE INDEX "data_exports_organization_id_created_at_idx" ON "public"."data_exports" USING "btree" ("organization_id", "created_at" DESC);
+
+
+
+CREATE INDEX "data_imports_organization_id_created_at_idx" ON "public"."data_imports" USING "btree" ("organization_id", "created_at" DESC);
+
+
+
 CREATE INDEX "deworming_records_appointment_id_idx" ON "public"."deworming_records" USING "btree" ("appointment_id");
 
 
@@ -2808,6 +3322,10 @@ CREATE INDEX "diagnoses_pet_id_idx" ON "public"."diagnoses" USING "btree" ("pet_
 
 
 CREATE INDEX "diagnostics_appointment_id_idx" ON "public"."diagnostics" USING "btree" ("appointment_id");
+
+
+
+CREATE INDEX "diagnostics_document_id_idx" ON "public"."diagnostics" USING "btree" ("document_id");
 
 
 
@@ -2863,6 +3381,10 @@ CREATE INDEX "invoice_items_invoice_id_idx" ON "public"."invoice_items" USING "b
 
 
 
+CREATE INDEX "invoice_items_service_id_idx" ON "public"."invoice_items" USING "btree" ("service_id");
+
+
+
 CREATE INDEX "invoices_appointment_id_idx" ON "public"."invoices" USING "btree" ("appointment_id");
 
 
@@ -2895,6 +3417,10 @@ CREATE UNIQUE INDEX "medications_name_key" ON "public"."medications" USING "btre
 
 
 
+CREATE INDEX "nav_menu_items_org_parent_position_idx" ON "public"."nav_menu_items" USING "btree" ("organization_id", "parent_id", "position");
+
+
+
 CREATE INDEX "notification_logs_notification_id_idx" ON "public"."notification_logs" USING "btree" ("notification_id");
 
 
@@ -2924,6 +3450,10 @@ CREATE INDEX "organization_hero_images_org_position_idx" ON "public"."organizati
 
 
 CREATE UNIQUE INDEX "organizations_slug_key" ON "public"."organizations" USING "btree" ("slug") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE INDEX "page_section_items_org_page_section_position_idx" ON "public"."page_section_items" USING "btree" ("organization_id", "page", "section", "position");
 
 
 
@@ -2963,6 +3493,10 @@ CREATE INDEX "pets_species_id_idx" ON "public"."pets" USING "btree" ("species_id
 
 
 
+CREATE INDEX "prescription_items_medication_id_idx" ON "public"."prescription_items" USING "btree" ("medication_id");
+
+
+
 CREATE INDEX "prescription_items_prescription_id_idx" ON "public"."prescription_items" USING "btree" ("prescription_id");
 
 
@@ -2991,6 +3525,18 @@ CREATE UNIQUE INDEX "push_subscriptions_user_endpoint_key" ON "public"."push_sub
 
 
 
+CREATE INDEX "refunds_invoice_id_idx" ON "public"."refunds" USING "btree" ("invoice_id");
+
+
+
+CREATE INDEX "refunds_organization_id_refunded_at_idx" ON "public"."refunds" USING "btree" ("organization_id", "refunded_at" DESC);
+
+
+
+CREATE INDEX "refunds_payment_id_idx" ON "public"."refunds" USING "btree" ("payment_id");
+
+
+
 CREATE UNIQUE INDEX "service_categories_id_organization_id_key" ON "public"."service_categories" USING "btree" ("id", "organization_id");
 
 
@@ -3000,6 +3546,10 @@ CREATE INDEX "service_categories_organization_id_idx" ON "public"."service_categ
 
 
 CREATE UNIQUE INDEX "service_categories_organization_id_name_key" ON "public"."service_categories" USING "btree" ("organization_id", "name") WHERE ("deleted_at" IS NULL);
+
+
+
+CREATE INDEX "services_category_id_idx" ON "public"."services" USING "btree" ("category_id");
 
 
 
@@ -3055,7 +3605,15 @@ CREATE INDEX "user_roles_branch_id_idx" ON "public"."user_roles" USING "btree" (
 
 
 
+CREATE INDEX "user_roles_org_role_created_idx" ON "public"."user_roles" USING "btree" ("organization_id", "role_id", "created_at" DESC) WHERE ("revoked_at" IS NULL);
+
+
+
 CREATE INDEX "user_roles_organization_id_idx" ON "public"."user_roles" USING "btree" ("organization_id");
+
+
+
+CREATE INDEX "user_roles_role_id_idx" ON "public"."user_roles" USING "btree" ("role_id");
 
 
 
@@ -3075,6 +3633,10 @@ CREATE INDEX "vaccination_schedules_organization_id_idx" ON "public"."vaccinatio
 
 
 
+CREATE INDEX "vaccination_schedules_species_id_idx" ON "public"."vaccination_schedules" USING "btree" ("species_id");
+
+
+
 CREATE INDEX "vaccinations_appointment_id_idx" ON "public"."vaccinations" USING "btree" ("appointment_id");
 
 
@@ -3084,6 +3646,10 @@ CREATE INDEX "vaccinations_organization_id_idx" ON "public"."vaccinations" USING
 
 
 CREATE INDEX "vaccinations_pet_id_idx" ON "public"."vaccinations" USING "btree" ("pet_id");
+
+
+
+CREATE INDEX "vaccinations_schedule_id_idx" ON "public"."vaccinations" USING "btree" ("vaccination_schedule_id");
 
 
 
@@ -3124,6 +3690,30 @@ CREATE OR REPLACE TRIGGER "clients_audit" AFTER INSERT OR UPDATE ON "public"."cl
 
 
 CREATE OR REPLACE TRIGGER "clients_set_updated_at" BEFORE UPDATE ON "public"."clients" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_exports_audit" AFTER INSERT ON "public"."data_exports" FOR EACH ROW EXECUTE FUNCTION "public"."write_audit_log"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_exports_no_truncate" BEFORE TRUNCATE ON "public"."data_exports" FOR EACH STATEMENT EXECUTE FUNCTION "public"."reject_table_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_exports_no_update" BEFORE DELETE OR UPDATE ON "public"."data_exports" FOR EACH ROW EXECUTE FUNCTION "public"."reject_table_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_imports_audit" AFTER INSERT ON "public"."data_imports" FOR EACH ROW EXECUTE FUNCTION "public"."write_audit_log"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_imports_no_truncate" BEFORE TRUNCATE ON "public"."data_imports" FOR EACH STATEMENT EXECUTE FUNCTION "public"."reject_table_mutation"();
+
+
+
+CREATE OR REPLACE TRIGGER "data_imports_no_update" BEFORE DELETE OR UPDATE ON "public"."data_imports" FOR EACH ROW EXECUTE FUNCTION "public"."reject_table_mutation"();
 
 
 
@@ -3207,6 +3797,14 @@ CREATE OR REPLACE TRIGGER "medications_set_updated_at" BEFORE UPDATE ON "public"
 
 
 
+CREATE OR REPLACE TRIGGER "nav_menu_items_enforce_depth_trigger" BEFORE INSERT OR UPDATE ON "public"."nav_menu_items" FOR EACH ROW EXECUTE FUNCTION "public"."nav_menu_items_enforce_depth"();
+
+
+
+CREATE OR REPLACE TRIGGER "nav_menu_items_set_updated_at" BEFORE UPDATE ON "public"."nav_menu_items" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
 CREATE OR REPLACE TRIGGER "notification_preferences_set_updated_at" BEFORE UPDATE ON "public"."notification_preferences" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
@@ -3223,7 +3821,15 @@ CREATE OR REPLACE TRIGGER "organizations_audit" AFTER INSERT OR UPDATE ON "publi
 
 
 
+CREATE OR REPLACE TRIGGER "organizations_provision_defaults" AFTER INSERT ON "public"."organizations" FOR EACH ROW EXECUTE FUNCTION "public"."provision_organization_on_insert"();
+
+
+
 CREATE OR REPLACE TRIGGER "organizations_set_updated_at" BEFORE UPDATE ON "public"."organizations" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "page_section_items_set_updated_at" BEFORE UPDATE ON "public"."page_section_items" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
 
 
 
@@ -3268,6 +3874,18 @@ CREATE OR REPLACE TRIGGER "prescriptions_notify_finalized" AFTER UPDATE OF "stat
 
 
 CREATE OR REPLACE TRIGGER "prescriptions_set_updated_at" BEFORE UPDATE ON "public"."prescriptions" FOR EACH ROW EXECUTE FUNCTION "public"."set_updated_at"();
+
+
+
+CREATE OR REPLACE TRIGGER "refunds_guard_amount" BEFORE INSERT OR UPDATE ON "public"."refunds" FOR EACH ROW EXECUTE FUNCTION "public"."guard_refund_amount"();
+
+
+
+CREATE OR REPLACE TRIGGER "refunds_recalculate_totals" AFTER INSERT OR DELETE OR UPDATE ON "public"."refunds" FOR EACH ROW EXECUTE FUNCTION "public"."recalculate_invoice_totals"();
+
+
+
+CREATE OR REPLACE TRIGGER "refunds_write_audit" AFTER INSERT OR UPDATE ON "public"."refunds" FOR EACH ROW EXECUTE FUNCTION "public"."write_audit_log"();
 
 
 
@@ -3436,6 +4054,26 @@ ALTER TABLE ONLY "public"."contact_messages"
 
 
 
+ALTER TABLE ONLY "public"."data_exports"
+    ADD CONSTRAINT "data_exports_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."data_exports"
+    ADD CONSTRAINT "data_exports_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."data_imports"
+    ADD CONSTRAINT "data_imports_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."data_imports"
+    ADD CONSTRAINT "data_imports_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+
 ALTER TABLE ONLY "public"."deworming_records"
     ADD CONSTRAINT "deworming_records_appointment_fk" FOREIGN KEY ("appointment_id", "organization_id") REFERENCES "public"."appointments"("id", "organization_id") ON DELETE RESTRICT;
 
@@ -3576,6 +4214,16 @@ ALTER TABLE ONLY "public"."invoices"
 
 
 
+ALTER TABLE ONLY "public"."nav_menu_items"
+    ADD CONSTRAINT "nav_menu_items_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."nav_menu_items"
+    ADD CONSTRAINT "nav_menu_items_parent_id_fkey" FOREIGN KEY ("parent_id") REFERENCES "public"."nav_menu_items"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."notification_logs"
     ADD CONSTRAINT "notification_logs_notification_id_fkey" FOREIGN KEY ("notification_id") REFERENCES "public"."notifications"("id") ON DELETE CASCADE;
 
@@ -3603,6 +4251,11 @@ ALTER TABLE ONLY "public"."notifications"
 
 ALTER TABLE ONLY "public"."organization_hero_images"
     ADD CONSTRAINT "organization_hero_images_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."page_section_items"
+    ADD CONSTRAINT "page_section_items_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
 
 
 
@@ -3673,6 +4326,26 @@ ALTER TABLE ONLY "public"."prescriptions"
 
 ALTER TABLE ONLY "public"."push_subscriptions"
     ADD CONSTRAINT "push_subscriptions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE CASCADE;
+
+
+
+ALTER TABLE ONLY "public"."refunds"
+    ADD CONSTRAINT "refunds_invoice_id_fkey" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."refunds"
+    ADD CONSTRAINT "refunds_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."refunds"
+    ADD CONSTRAINT "refunds_payment_id_fkey" FOREIGN KEY ("payment_id") REFERENCES "public"."payments"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."refunds"
+    ADD CONSTRAINT "refunds_recorded_by_fkey" FOREIGN KEY ("recorded_by") REFERENCES "public"."users"("id") ON DELETE RESTRICT;
 
 
 
@@ -3823,40 +4496,68 @@ CREATE POLICY "appointment_statuses_select" ON "public"."appointment_statuses" F
 
 
 
+CREATE POLICY "appointment_statuses_select_reception" ON "public"."appointment_statuses" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_receptionist"() AS "is_receptionist") OR ( SELECT "public"."is_support_staff"() AS "is_support_staff")));
+
+
+
 ALTER TABLE "public"."appointments" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "appointments_insert" ON "public"."appointments" FOR INSERT TO "authenticated" WITH CHECK ((("public"."owns_client"("client_id") AND "public"."owns_pet"("pet_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "appointments_insert" ON "public"."appointments" FOR INSERT TO "authenticated" WITH CHECK ((("public"."owns_client"("client_id") AND "public"."owns_pet"("pet_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "appointments_insert_reception" ON "public"."appointments" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "appointments_update" ON "public"."appointments" FOR UPDATE TO "authenticated" USING ((("public"."owns_client"("client_id") AND "public"."may_client_change_appointment"("starts_at", "organization_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id"))) WITH CHECK (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "appointments_select" ON "public"."appointments" FOR SELECT TO "authenticated" USING (("public"."owns_client"("client_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "appointments_select_finance" ON "public"."appointments" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "appointments_select_lab" ON "public"."appointments" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "appointments_select_reception" ON "public"."appointments" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "appointments_update" ON "public"."appointments" FOR UPDATE TO "authenticated" USING ((("public"."owns_client"("client_id") AND "public"."may_client_change_appointment"("starts_at", "organization_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))) WITH CHECK (("public"."owns_client"("client_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "appointments_update_reception" ON "public"."appointments" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
 
 
 
 ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "audit_logs_select" ON "public"."audit_logs" FOR SELECT TO "authenticated" USING (((("organization_id" IS NOT NULL) AND "public"."is_admin"("organization_id")) OR ("actor_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (("entity_table" = 'users'::"text") AND "public"."is_admin_of_user"("entity_id"))));
+CREATE POLICY "audit_logs_select" ON "public"."audit_logs" FOR SELECT TO "authenticated" USING (((("organization_id" IS NOT NULL) AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) OR ("actor_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (("entity_table" = 'users'::"text") AND "public"."is_admin_of_user"("entity_id"))));
 
 
 
 ALTER TABLE "public"."branches" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "branches_insert" ON "public"."branches" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "branches_delete" ON "public"."branches" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "branches_select" ON "public"."branches" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "branches_insert" ON "public"."branches" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "branches_update" ON "public"."branches" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "branches_select" ON "public"."branches" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
+
+
+
+CREATE POLICY "branches_update" ON "public"."branches" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -3867,18 +4568,26 @@ CREATE POLICY "breeds_select" ON "public"."breeds" FOR SELECT TO "authenticated"
 
 
 
+CREATE POLICY "breeds_select_support_staff" ON "public"."breeds" FOR SELECT TO "authenticated" USING (( SELECT "public"."is_support_staff"() AS "is_support_staff"));
+
+
+
 ALTER TABLE "public"."clients" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "clients_insert" ON "public"."clients" FOR INSERT TO "authenticated" WITH CHECK (("public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "clients_insert" ON "public"."clients" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "clients_select" ON "public"."clients" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "clients_select" ON "public"."clients" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text", 'doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "clients_update" ON "public"."clients" FOR UPDATE TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id"))) WITH CHECK ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "clients_select_support_staff" ON "public"."clients" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text", 'lab'::"text", 'receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "clients_update" ON "public"."clients" FOR UPDATE TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))) WITH CHECK ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -3889,101 +4598,175 @@ CREATE POLICY "contact_messages_insert" ON "public"."contact_messages" FOR INSER
 
 
 
-CREATE POLICY "contact_messages_select" ON "public"."contact_messages" FOR SELECT TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "contact_messages_select" ON "public"."contact_messages" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "contact_messages_update" ON "public"."contact_messages" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "contact_messages_select_reception" ON "public"."contact_messages" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "contact_messages_update" ON "public"."contact_messages" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "contact_messages_update_reception" ON "public"."contact_messages" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+ALTER TABLE "public"."data_exports" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "data_exports_insert" ON "public"."data_exports" FOR INSERT TO "authenticated" WITH CHECK (((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) AND ("actor_user_id" = ( SELECT "auth"."uid"() AS "uid"))));
+
+
+
+CREATE POLICY "data_exports_select" ON "public"."data_exports" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+ALTER TABLE "public"."data_imports" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "data_imports_insert" ON "public"."data_imports" FOR INSERT TO "authenticated" WITH CHECK (((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) AND ("actor_user_id" = ( SELECT "auth"."uid"() AS "uid"))));
+
+
+
+CREATE POLICY "data_imports_select" ON "public"."data_imports" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."deworming_records" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "deworming_records_insert" ON "public"."deworming_records" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "deworming_records_insert" ON "public"."deworming_records" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "deworming_records_select" ON "public"."deworming_records" FOR SELECT TO "authenticated" USING (("public"."owns_pet"("pet_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "deworming_records_select" ON "public"."deworming_records" FOR SELECT TO "authenticated" USING (("public"."owns_pet"("pet_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "deworming_records_update" ON "public"."deworming_records" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "deworming_records_select_reception" ON "public"."deworming_records" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "deworming_records_update" ON "public"."deworming_records" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
 ALTER TABLE "public"."diagnoses" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "diagnoses_insert" ON "public"."diagnoses" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "diagnoses_insert" ON "public"."diagnoses" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "diagnoses_select" ON "public"."diagnoses" FOR SELECT TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND "public"."has_finalized_soap"("appointment_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "diagnoses_select" ON "public"."diagnoses" FOR SELECT TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND "public"."has_finalized_soap"("appointment_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "diagnoses_update" ON "public"."diagnoses" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "diagnoses_update" ON "public"."diagnoses" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
 ALTER TABLE "public"."diagnostics" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "diagnostics_insert" ON "public"."diagnostics" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "diagnostics_insert" ON "public"."diagnostics" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "diagnostics_select" ON "public"."diagnostics" FOR SELECT TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND "public"."has_finalized_soap"("appointment_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "diagnostics_select" ON "public"."diagnostics" FOR SELECT TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND "public"."has_finalized_soap"("appointment_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "diagnostics_update" ON "public"."diagnostics" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "diagnostics_select_lab" ON "public"."diagnostics" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "diagnostics_select_reception" ON "public"."diagnostics" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "diagnostics_update" ON "public"."diagnostics" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "diagnostics_update_lab" ON "public"."diagnostics" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids")));
 
 
 
 ALTER TABLE "public"."doctor_availability" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "doctor_availability_insert" ON "public"."doctor_availability" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "doctor_availability_insert" ON "public"."doctor_availability" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "doctor_availability_select" ON "public"."doctor_availability" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "doctor_availability_select" ON "public"."doctor_availability" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
 
 
 
-CREATE POLICY "doctor_availability_update" ON "public"."doctor_availability" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "doctor_availability_select_reception" ON "public"."doctor_availability" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."doctors" "d"
+  WHERE (("d"."id" = "doctor_availability"."doctor_id") AND ("d"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids"))))));
+
+
+
+CREATE POLICY "doctor_availability_update" ON "public"."doctor_availability" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."doctors" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "doctors_insert" ON "public"."doctors" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "doctors_insert" ON "public"."doctors" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "doctors_select" ON "public"."doctors" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "doctors_select" ON "public"."doctors" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
 
 
 
-CREATE POLICY "doctors_update" ON "public"."doctors" FOR UPDATE TO "authenticated" USING (("public"."is_admin"("organization_id") OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (("public"."is_admin"("organization_id") OR ("user_id" = ( SELECT "auth"."uid"() AS "uid"))));
+CREATE POLICY "doctors_select_reception" ON "public"."doctors" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "doctors_update" ON "public"."doctors" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")) OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")) OR ("user_id" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
 
 ALTER TABLE "public"."documents" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "documents_insert" ON "public"."documents" FOR INSERT TO "authenticated" WITH CHECK ((("uploaded_by" = ( SELECT "auth"."uid"() AS "uid")) AND (("public"."owns_pet"("pet_id") AND "is_client_visible") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id"))));
+CREATE POLICY "documents_insert" ON "public"."documents" FOR INSERT TO "authenticated" WITH CHECK ((("uploaded_by" = ( SELECT "auth"."uid"() AS "uid")) AND (("public"."owns_pet"("pet_id") AND "is_client_visible") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))));
 
 
 
-CREATE POLICY "documents_select" ON "public"."documents" FOR SELECT TO "authenticated" USING ((("is_client_visible" AND "public"."owns_pet"("pet_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "documents_insert_lab" ON "public"."documents" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."pets" "p"
+  WHERE (("p"."id" = "documents"."pet_id") AND ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids"))))));
 
 
 
-CREATE POLICY "documents_update" ON "public"."documents" FOR UPDATE TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND ("uploaded_by" = ( SELECT "auth"."uid"() AS "uid"))) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id"))) WITH CHECK ((("public"."owns_pet"("pet_id") AND ("uploaded_by" = ( SELECT "auth"."uid"() AS "uid"))) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "documents_select" ON "public"."documents" FOR SELECT TO "authenticated" USING ((("is_client_visible" AND "public"."owns_pet"("pet_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "documents_select_lab" ON "public"."documents" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."pets" "p"
+  WHERE (("p"."id" = "documents"."pet_id") AND ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['lab'::"text"]) AS "my_org_ids"))))));
+
+
+
+CREATE POLICY "documents_select_reception" ON "public"."documents" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."pets" "p"
+  WHERE (("p"."id" = "documents"."pet_id") AND ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids"))))));
+
+
+
+CREATE POLICY "documents_update" ON "public"."documents" FOR UPDATE TO "authenticated" USING ((("public"."owns_pet"("pet_id") AND ("uploaded_by" = ( SELECT "auth"."uid"() AS "uid"))) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))) WITH CHECK ((("public"."owns_pet"("pet_id") AND ("uploaded_by" = ( SELECT "auth"."uid"() AS "uid"))) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -4002,9 +4785,21 @@ CREATE POLICY "invoice_items_insert" ON "public"."invoice_items" FOR INSERT TO "
 
 
 
+CREATE POLICY "invoice_items_insert_finance" ON "public"."invoice_items" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "invoice_items"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
+
+
+
 CREATE POLICY "invoice_items_select" ON "public"."invoice_items" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."invoices" "i"
-  WHERE (("i"."id" = "invoice_items"."invoice_id") AND (("public"."owns_client"("i"."client_id") AND ("i"."status" <> 'draft'::"text")) OR "public"."is_admin"("i"."organization_id") OR "public"."is_doctor"("i"."organization_id"))))));
+  WHERE (("i"."id" = "invoice_items"."invoice_id") AND (("public"."owns_client"("i"."client_id") AND ("i"."status" <> 'draft'::"text")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))))));
+
+
+
+CREATE POLICY "invoice_items_select_finance" ON "public"."invoice_items" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "invoice_items"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
 
 
 
@@ -4016,6 +4811,14 @@ CREATE POLICY "invoice_items_update" ON "public"."invoice_items" FOR UPDATE TO "
 
 
 
+CREATE POLICY "invoice_items_update_finance" ON "public"."invoice_items" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "invoice_items"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "invoice_items"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
+
+
+
 ALTER TABLE "public"."invoices" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4023,11 +4826,23 @@ CREATE POLICY "invoices_insert" ON "public"."invoices" FOR INSERT TO "authentica
 
 
 
-CREATE POLICY "invoices_select" ON "public"."invoices" FOR SELECT TO "authenticated" USING ((("public"."owns_client"("client_id") AND ("status" <> 'draft'::"text")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "invoices_insert_finance" ON "public"."invoices" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "invoices_select" ON "public"."invoices" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text", 'doctor'::"text"]) AS "my_org_ids")) OR ("public"."owns_client"("client_id") AND ("status" <> 'draft'::"text"))));
+
+
+
+CREATE POLICY "invoices_select_finance" ON "public"."invoices" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
 
 
 
 CREATE POLICY "invoices_update" ON "public"."invoices" FOR UPDATE TO "authenticated" USING ("public"."is_billing_manager"("organization_id")) WITH CHECK ("public"."is_billing_manager"("organization_id"));
+
+
+
+CREATE POLICY "invoices_update_finance" ON "public"."invoices" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
 
 
 
@@ -4038,12 +4853,37 @@ CREATE POLICY "medications_select" ON "public"."medications" FOR SELECT TO "auth
 
 
 
+ALTER TABLE "public"."nav_menu_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "nav_menu_items_delete" ON "public"."nav_menu_items" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "nav_menu_items_insert" ON "public"."nav_menu_items" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "nav_menu_items_select" ON "public"."nav_menu_items" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "nav_menu_items_update" ON "public"."nav_menu_items" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
 ALTER TABLE "public"."notification_logs" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "notification_logs_select" ON "public"."notification_logs" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."notifications" "n"
-  WHERE (("n"."id" = "notification_logs"."notification_id") AND (("n"."recipient_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("n"."organization_id"))))));
+  WHERE (("n"."id" = "notification_logs"."notification_id") AND (("n"."recipient_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("n"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))))))));
+
+
+
+CREATE POLICY "notification_logs_select_reception" ON "public"."notification_logs" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."notifications" "n"
+  WHERE (("n"."id" = "notification_logs"."notification_id") AND ("n"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids"))))));
 
 
 
@@ -4065,56 +4905,87 @@ CREATE POLICY "notification_preferences_update" ON "public"."notification_prefer
 ALTER TABLE "public"."notification_templates" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "notification_templates_insert" ON "public"."notification_templates" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "notification_templates_insert" ON "public"."notification_templates" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "notification_templates_select" ON "public"."notification_templates" FOR SELECT TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "notification_templates_select" ON "public"."notification_templates" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "notification_templates_update" ON "public"."notification_templates" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "notification_templates_select_reception" ON "public"."notification_templates" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "notification_templates_update" ON "public"."notification_templates" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."notifications" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "notifications_admin_retry" ON "public"."notifications" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "notifications_admin_retry" ON "public"."notifications" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "notifications_select" ON "public"."notifications" FOR SELECT TO "authenticated" USING ((("recipient_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id")));
+CREATE POLICY "notifications_select" ON "public"."notifications" FOR SELECT TO "authenticated" USING ((("recipient_user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))));
+
+
+
+CREATE POLICY "notifications_select_reception" ON "public"."notifications" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
 
 
 
 ALTER TABLE "public"."organization_hero_images" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "organization_hero_images_delete" ON "public"."organization_hero_images" FOR DELETE TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "organization_hero_images_delete" ON "public"."organization_hero_images" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "organization_hero_images_insert" ON "public"."organization_hero_images" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "organization_hero_images_insert" ON "public"."organization_hero_images" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "organization_hero_images_select" ON "public"."organization_hero_images" FOR SELECT TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "organization_hero_images_select" ON "public"."organization_hero_images" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "organization_hero_images_update" ON "public"."organization_hero_images" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."organizations" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "organizations_insert" ON "public"."organizations" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_super_admin"());
+CREATE POLICY "organizations_insert" ON "public"."organizations" FOR INSERT TO "authenticated" WITH CHECK (( SELECT "public"."is_super_admin"() AS "is_super_admin"));
 
 
 
-CREATE POLICY "organizations_select" ON "public"."organizations" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("id"));
+CREATE POLICY "organizations_select" ON "public"."organizations" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
 
 
 
-CREATE POLICY "organizations_update" ON "public"."organizations" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("id")) WITH CHECK ("public"."is_admin"("id"));
+CREATE POLICY "organizations_update" ON "public"."organizations" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+ALTER TABLE "public"."page_section_items" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "page_section_items_delete" ON "public"."page_section_items" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "page_section_items_insert" ON "public"."page_section_items" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "page_section_items_select" ON "public"."page_section_items" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
+
+
+
+CREATE POLICY "page_section_items_update" ON "public"."page_section_items" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -4125,24 +4996,40 @@ CREATE POLICY "payments_insert" ON "public"."payments" FOR INSERT TO "authentica
 
 
 
+CREATE POLICY "payments_insert_finance" ON "public"."payments" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "payments"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
+
+
+
 CREATE POLICY "payments_select" ON "public"."payments" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."invoices" "i"
-  WHERE (("i"."id" = "payments"."invoice_id") AND (("public"."owns_client"("i"."client_id") AND ("i"."status" <> 'draft'::"text")) OR "public"."is_admin"("i"."organization_id") OR "public"."is_doctor"("i"."organization_id"))))));
+  WHERE (("i"."id" = "payments"."invoice_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text", 'doctor'::"text"]) AS "my_org_ids")) OR ("public"."owns_client"("i"."client_id") AND ("i"."status" <> 'draft'::"text")))))));
+
+
+
+CREATE POLICY "payments_select_finance" ON "public"."payments" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "payments"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
 
 
 
 ALTER TABLE "public"."pets" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "pets_insert" ON "public"."pets" FOR INSERT TO "authenticated" WITH CHECK (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "pets_insert" ON "public"."pets" FOR INSERT TO "authenticated" WITH CHECK (("public"."owns_client"("client_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "pets_select" ON "public"."pets" FOR SELECT TO "authenticated" USING (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "pets_select" ON "public"."pets" FOR SELECT TO "authenticated" USING (("public"."owns_client"("client_id") OR ( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text", 'doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "pets_update" ON "public"."pets" FOR UPDATE TO "authenticated" USING (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id"))) WITH CHECK (("public"."owns_client"("client_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "pets_select_support_staff" ON "public"."pets" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text", 'lab'::"text", 'receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "pets_update" ON "public"."pets" FOR UPDATE TO "authenticated" USING (("public"."owns_client"("client_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))) WITH CHECK (("public"."owns_client"("client_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -4151,42 +5038,42 @@ ALTER TABLE "public"."prescription_items" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "prescription_items_delete" ON "public"."prescription_items" FOR DELETE TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."prescriptions" "rx"
-  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND "public"."is_doctor"("rx"."organization_id")))));
+  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))))));
 
 
 
 CREATE POLICY "prescription_items_insert" ON "public"."prescription_items" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
    FROM "public"."prescriptions" "rx"
-  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND "public"."is_doctor"("rx"."organization_id")))));
+  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))))));
 
 
 
 CREATE POLICY "prescription_items_select" ON "public"."prescription_items" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."prescriptions" "rx"
-  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ((("rx"."status" = 'finalized'::"text") AND ("rx"."superseded_at" IS NULL) AND "public"."owns_pet"("rx"."pet_id")) OR "public"."is_admin"("rx"."organization_id") OR "public"."is_doctor"("rx"."organization_id"))))));
+  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ((("rx"."status" = 'finalized'::"text") AND ("rx"."superseded_at" IS NULL) AND "public"."owns_pet"("rx"."pet_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))))));
 
 
 
 CREATE POLICY "prescription_items_update" ON "public"."prescription_items" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."prescriptions" "rx"
-  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND "public"."is_doctor"("rx"."organization_id"))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM "public"."prescriptions" "rx"
-  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND "public"."is_doctor"("rx"."organization_id")))));
+  WHERE (("rx"."id" = "prescription_items"."prescription_id") AND ("rx"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))))));
 
 
 
 ALTER TABLE "public"."prescriptions" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "prescriptions_insert" ON "public"."prescriptions" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "prescriptions_insert" ON "public"."prescriptions" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "prescriptions_select" ON "public"."prescriptions" FOR SELECT TO "authenticated" USING (((("status" = 'finalized'::"text") AND ("superseded_at" IS NULL) AND "public"."owns_pet"("pet_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "prescriptions_select" ON "public"."prescriptions" FOR SELECT TO "authenticated" USING (((("status" = 'finalized'::"text") AND ("superseded_at" IS NULL) AND "public"."owns_pet"("pet_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "prescriptions_update" ON "public"."prescriptions" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "prescriptions_update" ON "public"."prescriptions" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
@@ -4205,6 +5092,29 @@ CREATE POLICY "push_subscriptions_select" ON "public"."push_subscriptions" FOR S
 
 
 
+ALTER TABLE "public"."refunds" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "refunds_insert" ON "public"."refunds" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_billing_manager"("organization_id"));
+
+
+
+CREATE POLICY "refunds_insert_finance" ON "public"."refunds" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "refunds_select" ON "public"."refunds" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "refunds"."invoice_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text", 'doctor'::"text"]) AS "my_org_ids")) OR ("public"."owns_client"("i"."client_id") AND ("i"."status" <> 'draft'::"text")))))));
+
+
+
+CREATE POLICY "refunds_select_finance" ON "public"."refunds" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
+   FROM "public"."invoices" "i"
+  WHERE (("i"."id" = "refunds"."invoice_id") AND ("i"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids"))))));
+
+
+
 ALTER TABLE "public"."roles" ENABLE ROW LEVEL SECURITY;
 
 
@@ -4215,49 +5125,73 @@ CREATE POLICY "roles_select" ON "public"."roles" FOR SELECT TO "authenticated" U
 ALTER TABLE "public"."service_categories" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "service_categories_insert" ON "public"."service_categories" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "service_categories_delete" ON "public"."service_categories" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "service_categories_select" ON "public"."service_categories" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "service_categories_insert" ON "public"."service_categories" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "service_categories_update" ON "public"."service_categories" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "service_categories_select" ON "public"."service_categories" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
+
+
+
+CREATE POLICY "service_categories_select_finance" ON "public"."service_categories" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "service_categories_select_reception" ON "public"."service_categories" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "service_categories_update" ON "public"."service_categories" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."services" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "services_insert" ON "public"."services" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "services_delete" ON "public"."services" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "services_select" ON "public"."services" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "services_insert" ON "public"."services" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "services_update" ON "public"."services" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "services_select" ON "public"."services" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
+
+
+
+CREATE POLICY "services_select_finance" ON "public"."services" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['finance_manager'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "services_select_reception" ON "public"."services" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "services_update" ON "public"."services" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."site_content" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "site_content_delete" ON "public"."site_content" FOR DELETE TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_content_delete" ON "public"."site_content" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_content_insert" ON "public"."site_content" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_content_insert" ON "public"."site_content" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_content_select" ON "public"."site_content" FOR SELECT TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_content_select" ON "public"."site_content" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_content_update" ON "public"."site_content" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_content_update" ON "public"."site_content" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -4266,61 +5200,61 @@ ALTER TABLE "public"."site_page_blocks" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "site_page_blocks_delete" ON "public"."site_page_blocks" FOR DELETE TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."site_pages" "p"
-  WHERE (("p"."id" = "site_page_blocks"."page_id") AND "public"."is_admin"("p"."organization_id")))));
+  WHERE (("p"."id" = "site_page_blocks"."page_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))))));
 
 
 
 CREATE POLICY "site_page_blocks_insert" ON "public"."site_page_blocks" FOR INSERT TO "authenticated" WITH CHECK ((EXISTS ( SELECT 1
    FROM "public"."site_pages" "p"
-  WHERE (("p"."id" = "site_page_blocks"."page_id") AND "public"."is_admin"("p"."organization_id")))));
+  WHERE (("p"."id" = "site_page_blocks"."page_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))))));
 
 
 
 CREATE POLICY "site_page_blocks_select" ON "public"."site_page_blocks" FOR SELECT TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."site_pages" "p"
-  WHERE (("p"."id" = "site_page_blocks"."page_id") AND "public"."is_admin"("p"."organization_id")))));
+  WHERE (("p"."id" = "site_page_blocks"."page_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))))));
 
 
 
 CREATE POLICY "site_page_blocks_update" ON "public"."site_page_blocks" FOR UPDATE TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."site_pages" "p"
-  WHERE (("p"."id" = "site_page_blocks"."page_id") AND "public"."is_admin"("p"."organization_id"))))) WITH CHECK ((EXISTS ( SELECT 1
+  WHERE (("p"."id" = "site_page_blocks"."page_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))))))) WITH CHECK ((EXISTS ( SELECT 1
    FROM "public"."site_pages" "p"
-  WHERE (("p"."id" = "site_page_blocks"."page_id") AND "public"."is_admin"("p"."organization_id")))));
+  WHERE (("p"."id" = "site_page_blocks"."page_id") AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("p"."organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))))));
 
 
 
 ALTER TABLE "public"."site_pages" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "site_pages_delete" ON "public"."site_pages" FOR DELETE TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_pages_delete" ON "public"."site_pages" FOR DELETE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_pages_insert" ON "public"."site_pages" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_pages_insert" ON "public"."site_pages" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_pages_select" ON "public"."site_pages" FOR SELECT TO "authenticated" USING ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_pages_select" ON "public"."site_pages" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "site_pages_update" ON "public"."site_pages" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "site_pages_update" ON "public"."site_pages" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."soap_records" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "soap_records_insert" ON "public"."soap_records" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "soap_records_insert" ON "public"."soap_records" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "soap_records_select" ON "public"."soap_records" FOR SELECT TO "authenticated" USING (((("status" = 'finalized'::"text") AND ("superseded_at" IS NULL) AND "public"."owns_pet"("pet_id")) OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "soap_records_select" ON "public"."soap_records" FOR SELECT TO "authenticated" USING (((("status" = 'finalized'::"text") AND ("superseded_at" IS NULL) AND "public"."owns_pet"("pet_id")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "soap_records_update" ON "public"."soap_records" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "soap_records_update" ON "public"."soap_records" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
@@ -4331,35 +5265,39 @@ CREATE POLICY "species_select" ON "public"."species" FOR SELECT TO "authenticate
 
 
 
+CREATE POLICY "species_select_support_staff" ON "public"."species" FOR SELECT TO "authenticated" USING (( SELECT "public"."is_support_staff"() AS "is_support_staff"));
+
+
+
 ALTER TABLE "public"."staff" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "staff_insert" ON "public"."staff" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "staff_insert" ON "public"."staff" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "staff_select" ON "public"."staff" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id")));
+CREATE POLICY "staff_select" ON "public"."staff" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))));
 
 
 
-CREATE POLICY "staff_update" ON "public"."staff" FOR UPDATE TO "authenticated" USING (("public"."is_admin"("organization_id") OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (("public"."is_admin"("organization_id") OR ("user_id" = ( SELECT "auth"."uid"() AS "uid"))));
+CREATE POLICY "staff_update" ON "public"."staff" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")) OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")) OR ("user_id" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
 
 ALTER TABLE "public"."user_roles" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "user_roles_insert" ON "public"."user_roles" FOR INSERT TO "authenticated" WITH CHECK (("public"."is_admin"("organization_id") AND ("public"."is_super_admin"() OR (( SELECT "r"."slug"
+CREATE POLICY "user_roles_insert" ON "public"."user_roles" FOR INSERT TO "authenticated" WITH CHECK (((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) AND (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR (( SELECT "r"."slug"
    FROM "public"."roles" "r"
   WHERE ("r"."id" = "user_roles"."role_id")) <> 'super_admin'::"text"))));
 
 
 
-CREATE POLICY "user_roles_select" ON "public"."user_roles" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_admin"("organization_id")));
+CREATE POLICY "user_roles_select" ON "public"."user_roles" FOR SELECT TO "authenticated" USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))));
 
 
 
-CREATE POLICY "user_roles_update" ON "public"."user_roles" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "user_roles_update" ON "public"."user_roles" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
@@ -4377,30 +5315,38 @@ CREATE POLICY "users_update" ON "public"."users" FOR UPDATE TO "authenticated" U
 ALTER TABLE "public"."vaccination_schedules" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "vaccination_schedules_insert" ON "public"."vaccination_schedules" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "vaccination_schedules_insert" ON "public"."vaccination_schedules" FOR INSERT TO "authenticated" WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "vaccination_schedules_select" ON "public"."vaccination_schedules" FOR SELECT TO "authenticated" USING ("public"."is_org_member"("organization_id"));
+CREATE POLICY "vaccination_schedules_select" ON "public"."vaccination_schedules" FOR SELECT TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_member_org_ids"() AS "my_member_org_ids"))));
 
 
 
-CREATE POLICY "vaccination_schedules_update" ON "public"."vaccination_schedules" FOR UPDATE TO "authenticated" USING ("public"."is_admin"("organization_id")) WITH CHECK ("public"."is_admin"("organization_id"));
+CREATE POLICY "vaccination_schedules_select_reception" ON "public"."vaccination_schedules" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "vaccination_schedules_update" ON "public"."vaccination_schedules" FOR UPDATE TO "authenticated" USING ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids")))) WITH CHECK ((( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))));
 
 
 
 ALTER TABLE "public"."vaccinations" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "vaccinations_insert" ON "public"."vaccinations" FOR INSERT TO "authenticated" WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "vaccinations_insert" ON "public"."vaccinations" FOR INSERT TO "authenticated" WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
-CREATE POLICY "vaccinations_select" ON "public"."vaccinations" FOR SELECT TO "authenticated" USING (("public"."owns_pet"("pet_id") OR "public"."is_admin"("organization_id") OR "public"."is_doctor"("organization_id")));
+CREATE POLICY "vaccinations_select" ON "public"."vaccinations" FOR SELECT TO "authenticated" USING (("public"."owns_pet"("pet_id") OR (( SELECT "public"."is_super_admin"() AS "is_super_admin") OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['admin'::"text"]) AS "my_org_ids"))) OR ("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))));
 
 
 
-CREATE POLICY "vaccinations_update" ON "public"."vaccinations" FOR UPDATE TO "authenticated" USING ("public"."is_doctor"("organization_id")) WITH CHECK ("public"."is_doctor"("organization_id"));
+CREATE POLICY "vaccinations_select_reception" ON "public"."vaccinations" FOR SELECT TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['receptionist'::"text"]) AS "my_org_ids")));
+
+
+
+CREATE POLICY "vaccinations_update" ON "public"."vaccinations" FOR UPDATE TO "authenticated" USING (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids"))) WITH CHECK (("organization_id" IN ( SELECT "public"."my_org_ids"(ARRAY['doctor'::"text"]) AS "my_org_ids")));
 
 
 
@@ -5336,9 +6282,33 @@ GRANT ALL ON FUNCTION "public"."is_doctor"("p_organization_id" "uuid") TO "servi
 
 
 
+REVOKE ALL ON FUNCTION "public"."is_finance_manager"("p_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_finance_manager"("p_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_finance_manager"("p_organization_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_financial_report_viewer"("p_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_financial_report_viewer"("p_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_financial_report_viewer"("p_organization_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_lab"("p_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_lab"("p_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_lab"("p_organization_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."is_org_member"("p_organization_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."is_org_member"("p_organization_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."is_org_member"("p_organization_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."is_receptionist"("p_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_receptionist"("p_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_receptionist"("p_organization_id" "uuid") TO "service_role";
 
 
 
@@ -5354,9 +6324,27 @@ GRANT ALL ON FUNCTION "public"."is_super_admin"() TO "service_role";
 
 
 
+REVOKE ALL ON FUNCTION "public"."is_support_staff"("p_organization_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."is_support_staff"("p_organization_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."is_support_staff"("p_organization_id" "uuid") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "public"."may_client_change_appointment"("p_starts_at" timestamp with time zone, "p_organization_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."may_client_change_appointment"("p_starts_at" timestamp with time zone, "p_organization_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."may_client_change_appointment"("p_starts_at" timestamp with time zone, "p_organization_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."my_member_org_ids"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."my_member_org_ids"() TO "authenticated";
+GRANT ALL ON FUNCTION "public"."my_member_org_ids"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) TO "authenticated";
+GRANT ALL ON FUNCTION "public"."my_org_ids"("p_slugs" "text"[]) TO "service_role";
 
 
 
@@ -5379,6 +6367,18 @@ GRANT ALL ON FUNCTION "public"."owns_pet"("p_pet_id" "uuid") TO "service_role";
 REVOKE ALL ON FUNCTION "public"."pet_id_from_object_path"("p_name" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."pet_id_from_object_path"("p_name" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."pet_id_from_object_path"("p_name" "text") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."provision_organization"("p_organization_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "public"."provision_organization_on_insert"() FROM PUBLIC;
+
+
+
+GRANT ALL ON FUNCTION "public"."reorder_nav_menu_items"("p_organization_id" "uuid", "p_tree" "jsonb") TO "authenticated";
 
 
 
@@ -5445,6 +6445,12 @@ GRANT ALL ON FUNCTION "public"."revise_prescription"("p_prescription_id" "uuid")
 REVOKE ALL ON FUNCTION "public"."revise_soap_record"("p_soap_record_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."revise_soap_record"("p_soap_record_id" "uuid") TO "authenticated";
 GRANT ALL ON FUNCTION "public"."revise_soap_record"("p_soap_record_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "public"."set_primary_branch"("p_branch_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."set_primary_branch"("p_branch_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "public"."set_primary_branch"("p_branch_id" "uuid") TO "service_role";
 
 
 
@@ -5540,7 +6546,7 @@ GRANT ALL ON TABLE "public"."audit_logs" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."branches" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,MAINTAIN,UPDATE ON TABLE "public"."branches" TO "authenticated";
 GRANT ALL ON TABLE "public"."branches" TO "service_role";
 
 
@@ -5630,6 +6636,18 @@ GRANT UPDATE("deleted_at") ON TABLE "public"."clients" TO "authenticated";
 GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE "public"."contact_messages" TO "authenticated";
 GRANT ALL ON TABLE "public"."contact_messages" TO "service_role";
 GRANT INSERT ON TABLE "public"."contact_messages" TO "anon";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."data_exports" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."data_exports" TO "authenticated";
+GRANT ALL ON TABLE "public"."data_exports" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."data_imports" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."data_imports" TO "authenticated";
+GRANT ALL ON TABLE "public"."data_imports" TO "service_role";
 
 
 
@@ -5900,6 +6918,12 @@ GRANT ALL ON TABLE "public"."medications" TO "service_role";
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."nav_menu_items" TO "anon";
+GRANT ALL ON TABLE "public"."nav_menu_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."nav_menu_items" TO "service_role";
+
+
+
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."notification_logs" TO "authenticated";
 GRANT ALL ON TABLE "public"."notification_logs" TO "service_role";
 
@@ -5937,7 +6961,7 @@ GRANT UPDATE("failure_reason") ON TABLE "public"."notifications" TO "authenticat
 
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."organization_hero_images" TO "anon";
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."organization_hero_images" TO "authenticated";
+GRANT ALL ON TABLE "public"."organization_hero_images" TO "authenticated";
 GRANT ALL ON TABLE "public"."organization_hero_images" TO "service_role";
 
 
@@ -6004,6 +7028,16 @@ GRANT UPDATE("whatsapp_number") ON TABLE "public"."organizations" TO "authentica
 
 
 GRANT UPDATE("logo_path") ON TABLE "public"."organizations" TO "authenticated";
+
+
+
+GRANT UPDATE("footer_show_logo") ON TABLE "public"."organizations" TO "authenticated";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."page_section_items" TO "anon";
+GRANT ALL ON TABLE "public"."page_section_items" TO "authenticated";
+GRANT ALL ON TABLE "public"."page_section_items" TO "service_role";
 
 
 
@@ -6255,12 +7289,18 @@ GRANT ALL ON TABLE "public"."push_subscriptions" TO "service_role";
 
 
 
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."refunds" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."refunds" TO "authenticated";
+GRANT ALL ON TABLE "public"."refunds" TO "service_role";
+
+
+
 GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE "public"."roles" TO "authenticated";
 GRANT ALL ON TABLE "public"."roles" TO "service_role";
 
 
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."service_categories" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."service_categories" TO "authenticated";
 GRANT ALL ON TABLE "public"."service_categories" TO "service_role";
 
 
@@ -6281,7 +7321,7 @@ GRANT UPDATE("deleted_at") ON TABLE "public"."service_categories" TO "authentica
 
 
 
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."services" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."services" TO "authenticated";
 GRANT ALL ON TABLE "public"."services" TO "service_role";
 
 

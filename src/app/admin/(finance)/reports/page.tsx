@@ -4,8 +4,8 @@ import Link from "next/link";
 
 import { ReportAccessSettings } from "@/components/reports/report-access-settings";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { hasRole, requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
+import { hasRole } from "@/features/auth/session";
 import { listDoctors } from "@/features/doctors/queries";
 
 export const metadata: Metadata = { title: "Reports · TV Care" };
@@ -24,7 +24,7 @@ const CATEGORIES = [
 ];
 
 export default async function AdminReportsPage() {
-  const user = await requireRole(...ACCESS.finance);
+  const user = await requireAccess("finance");
   const isAdmin = hasRole(user, "admin", "super_admin");
 
   const categories = isAdmin ? CATEGORIES : CATEGORIES.filter((category) => category.financeOnly);

@@ -6,8 +6,7 @@ import { QuietHoursForm } from "@/components/notifications/quiet-hours-form";
 import { TemplateEditor } from "@/components/notifications/template-editor";
 import { Pagination } from "@/components/search/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { getFailedNotifications } from "@/features/notifications/queries";
 import { getTemplates } from "@/features/notifications/templates";
 import { getOwnOrganization } from "@/features/organizations/queries";
@@ -15,7 +14,7 @@ import { getOwnOrganization } from "@/features/organizations/queries";
 export const metadata: Metadata = { title: "Notifications · TV Care" };
 
 export default async function AdminNotificationsPage({ searchParams }: PageProps<"/admin/notifications">) {
-  const user = await requireRole(...ACCESS.reception);
+  const user = await requireAccess("reception");
   const organizationId = user.organizationIds[0];
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;

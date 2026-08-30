@@ -51,8 +51,13 @@ describe("migrations", () => {
 });
 
 describe("seeded reference data", () => {
-  it("seeds exactly the seven roles", async () => {
-    const { data, error } = await admin.from("roles").select("slug, is_assignable_in_ui");
+  it("seeds exactly the seven system roles", async () => {
+    // `is_system` matters now: a practice can define roles of its own, and
+    // this assertion is about the ones the application ships with.
+    const { data, error } = await admin
+      .from("roles")
+      .select("slug, is_assignable_in_ui")
+      .eq("is_system", true);
 
     expect(error).toBeNull();
     expect(data?.map((row) => row.slug).sort()).toEqual([

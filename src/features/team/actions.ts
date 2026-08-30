@@ -7,31 +7,43 @@ import { requireRole } from "@/features/auth/session";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { inviteTeamMemberSchema, setTeamRoleSchema, type AssignableRoleSlug } from "@/lib/validation/team";
+import { addTeamMemberSchema, setTeamRoleSchema, NO_ROLE } from "@/lib/validation/team";
 
 /**
  * Grants one role to one already-existing user within organizationId,
  * creating or reactivating that role's own table row first where the rest
  * of the app needs one to exist (doctors, clients) — shared by
  * setTeamRoleAction (an existing person, role changing) and
- * inviteTeamMemberAction (a brand new person, role set once on arrival).
+ * addTeamMemberAction (a brand new person, role set once on arrival).
  * Assumes any previously active role has already been revoked by the
  * caller; "none" is not a valid input here, only a real role.
+ *
+ * Takes the role's id, since a practice's own roles have slugs only it knows.
+ * The lookup is the check: it accepts a system role or one belonging to this
+ * practice, so an id from anywhere else — another practice's role, a deleted
+ * one, something invented — resolves to nothing and the grant is refused.
+ * super_admin is excluded here as it is everywhere: architecture only.
  */
 async function grantTeamRole(
   supabase: SupabaseClient,
   userId: string,
   organizationId: string,
-  role: Exclude<AssignableRoleSlug, "none">,
+  roleId: string,
 ): Promise<FormState | null> {
   const { data: roleRow, error: roleLookupError } = await supabase
     .from("roles")
-    .select("id")
-    .eq("slug", role)
-    .single();
+    .select("id, slug, is_system")
+    .eq("id", roleId)
+    .is("deleted_at", null)
+    .neq("slug", "super_admin")
+    .or(`organization_id.eq.${organizationId},is_system.eq.true`)
+    .maybeSingle();
+
   if (roleLookupError || !roleRow) {
     return { status: "error", message: "That role is not configured for this practice." };
   }
+
+  const role = roleRow.slug as string;
 
   if (role === "client") {
     const { data: profile } = await supabase.from("users").select("full_name, phone").eq("id", userId).single();
@@ -77,8 +89,11 @@ async function grantTeamRole(
     }
   }
 
-  if (role === "admin" || role === "finance_manager" || role === "lab" || role === "receptionist") {
-    // Every clinic-side, non-doctor role needs a staff row backing it, or
+  // Every clinic-side, non-doctor role needs a staff row backing it — a role
+  // the practice defined itself included, which is why this asks what the role
+  // is *not* rather than listing the ones it knows.
+  if (role !== "client" && role !== "doctor") {
+    // Or
     // deactivating them later (role -> "none") drops them out of
     // getTeamRoster entirely: neither an active member nor a pending staff
     // record, unreachable from this page afterwards. Doctor/client each
@@ -144,7 +159,7 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
     return failure("team", revokeError, "We could not update this person's role just now. Please try again.");
   }
 
-  if (role === "none") {
+  if (role === NO_ROLE) {
     revalidatePath("/admin/users");
     return { status: "success", message: "Role removed." };
   }
@@ -159,65 +174,82 @@ export async function setTeamRoleAction(_previous: FormState, formData: FormData
 }
 
 /**
- * Adds a brand new person to the practice — the "Add team member" flow
- * /admin/users was missing entirely: every other route onto the roster
- * (self-registration, inviteDoctorAction) provisions a specific role
- * automatically, and demo seed data aside, nothing created the "registered,
- * no role yet" account this page exists to manage until now.
+ * Adds a brand new person to the practice, ready to sign in.
  *
- * A real Supabase Auth invite, same shape as inviteDoctorAction — the
- * service role is used for that one call only, everything after runs
- * through the admin's own RLS-scoped session.
+ * No invitation email. The admin sets the password here and passes it on the
+ * way they would anything else — which is how a practice actually adds a
+ * receptionist who is standing in front of them, and avoids an account that
+ * exists but cannot be used until somebody finds an email. `email_confirm`
+ * says the address is taken as verified because an administrator vouched for
+ * it; without it Supabase would hold the account back pending a confirmation
+ * nobody is going to click.
+ *
+ * The service role is used for that one call — auth.users has no other way in
+ * — and everything after it runs through the admin's own RLS-scoped session,
+ * the same shape as adminSetPasswordAction and inviteDoctorAction.
+ *
+ * The password reaches Supabase and is never stored, logged or returned: it
+ * lives in this function for exactly as long as the call takes.
  */
-export async function inviteTeamMemberAction(_previous: FormState, formData: FormData): Promise<FormState> {
+export async function addTeamMemberAction(_previous: FormState, formData: FormData): Promise<FormState> {
   const user = await requireRole("admin", "super_admin");
   const organizationId = user.organizationIds[0];
   if (!organizationId) return { status: "error", message: "Your account is not linked to a practice yet." };
 
-  const parsed = inviteTeamMemberSchema.safeParse({
+  const parsed = addTeamMemberSchema.safeParse({
     fullName: text(formData, "fullName") ?? "",
     email: text(formData, "email") ?? "",
     phone: text(formData, "phone") ?? null,
     jobTitle: text(formData, "jobTitle") ?? null,
-    role: text(formData, "role") ?? "none",
+    // Not read through `text()`: it trims, and a password's spaces are the
+    // account holder's business.
+    password: String(formData.get("password") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+    role: text(formData, "role") ?? NO_ROLE,
   });
   if (!parsed.success) return invalid(parsed.error);
-  const { fullName, email, phone, jobTitle, role } = parsed.data;
+  const { fullName, email, phone, jobTitle, password, role } = parsed.data;
 
   const serviceClient = createServiceClient();
-  const { data: invited, error: inviteError } = await serviceClient.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName, phone },
+  const { data: created, error: createError } = await serviceClient.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, phone },
   });
 
-  if (inviteError) {
-    if (inviteError.code === "email_exists") {
+  if (createError || !created.user) {
+    if (createError?.code === "email_exists") {
       return {
         status: "error",
         message: "An account with this email already exists.",
         fieldErrors: { email: ["Already in use"] },
       };
     }
-    return failure("team", inviteError, "We could not send that invitation just now. Please try again.");
+    return failure("team", createError, "We could not add this person just now. Please try again.");
   }
 
   const supabase = await createClient();
   const { error: staffError } = await supabase
     .from("staff")
-    .insert({ user_id: invited.user.id, organization_id: organizationId, job_title: jobTitle });
+    .insert({ user_id: created.user.id, organization_id: organizationId, job_title: jobTitle });
 
   if (staffError) {
     return failure("team", staffError, "We could not add this person just now. Please try again.");
   }
 
-  if (role !== "none") {
-    const grantResult = await grantTeamRole(supabase, invited.user.id, organizationId, role);
+  if (role !== NO_ROLE) {
+    const grantResult = await grantTeamRole(supabase, created.user.id, organizationId, role);
     if (grantResult) return grantResult;
   }
 
   revalidatePath("/admin/users");
   revalidatePath("/admin/doctors");
   revalidatePath("/admin/clients");
-  return { status: "success", message: `Invitation sent to ${email}.` };
+  return {
+    status: "success",
+    message: `${fullName} can sign in now with ${email}. Give them the password you just set — they can change it from their profile.`,
+  };
 }
 
 /**

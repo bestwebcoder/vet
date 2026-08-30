@@ -1,11 +1,13 @@
+import { Database } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { BranchManager } from "@/components/branches/branch-manager";
 import { HeroImageForm } from "@/components/organizations/hero-image-form";
 import { LogoImageForm } from "@/components/organizations/logo-image-form";
 import { SettingsForm } from "@/components/organizations/settings-form";
 import { ErrorState } from "@/components/states/error-state";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
 import { listBranchesForAdmin } from "@/features/branches/queries";
 import { getOrganizationHeroImages, getOwnOrganization } from "@/features/organizations/queries";
@@ -50,6 +52,27 @@ export default async function AdminSettingsPage() {
           <BranchManager branches={branches.status === "ok" ? branches.data : []} />
           <LogoImageForm logoUrl={organization.data.logoUrl} footerShowLogo={organization.data.footerShowLogo} />
           <HeroImageForm heroImages={heroImages.status === "ok" ? heroImages.data : []} />
+
+          {/* Backups are their own screen — too much for a settings card — but
+              this is where an administrator comes looking for them. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Data and backups</CardTitle>
+              <CardDescription>
+                Download a copy of everything this practice holds, import clients and services from a spreadsheet,
+                recover a deleted record, or read the audit log.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/admin/data"
+                className="text-primary inline-flex min-h-11 items-center gap-2 text-sm hover:underline"
+              >
+                <Database className="size-4" aria-hidden />
+                Open Data
+              </Link>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

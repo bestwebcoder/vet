@@ -1,4 +1,12 @@
-import type { RoleSlug } from "@/features/auth/session";
+import { redirect } from "next/navigation";
+
+import {
+  hasPermission,
+  hasRole,
+  requireUser,
+  type RoleSlug,
+  type SessionUser,
+} from "@/features/auth/session";
 
 /**
  * Which roles may reach each section of /admin.
@@ -31,3 +39,45 @@ export const ACCESS = {
   /** The front desk: booking, services, doctor information, schedules, messages. */
   reception: [...ADMIN_ONLY, "receptionist"] as RoleSlug[],
 } as const;
+
+/**
+ * The permission that opens each area to a role the practice defined itself.
+ *
+ * One per route group rather than one per page: the groups already carve
+ * /admin up the way a practice does, and a permission per page would be a
+ * second matrix to keep in step with the first. Within a group, what a person
+ * actually sees is still decided per query by row level security — a custom
+ * role that reaches Billing with only `billing.view` gets a read-only screen
+ * because the write policies say no, not because a page decided so.
+ */
+export const AREA_PERMISSIONS = {
+  shared: [] as string[],
+  finance: ["billing.view", "reports.view"],
+  lab: ["clinical.view"],
+  reception: ["appointments.view", "clients.view", "services.view", "preventive.view"],
+} as const satisfies Record<keyof typeof ACCESS, readonly string[]>;
+
+export type AreaKey = keyof typeof ACCESS;
+
+/**
+ * Guards one area of /admin, admitting either a built-in role or a custom one
+ * holding the right permission.
+ *
+ * Replaces `requireAccess("x")`, which could only ever admit the seven
+ * slugs this application ships with — a practice's own "Nurse" would have
+ * bounced off the page whatever its permissions said.
+ */
+export async function requireAccess(area: AreaKey): Promise<SessionUser> {
+  const user = await requireUser();
+
+  if (hasRole(user, ...ACCESS[area])) return user;
+
+  // `shared` is the dashboard, profile and search: anyone with a desk here,
+  // which is anyone holding any permission at all.
+  const permitted =
+    area === "shared" ? user.permissions.length > 0 : hasPermission(user, ...AREA_PERMISSIONS[area]);
+
+  if (!permitted) redirect("/no-access");
+
+  return user;
+}

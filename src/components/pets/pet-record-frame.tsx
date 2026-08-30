@@ -2,8 +2,8 @@ import { CalendarPlus, PawPrint, Pencil } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
-import { DeletePetDialog } from "@/components/pets/delete-pet-dialog";
 import { PetArchiveToggle } from "@/components/pets/pet-archive-toggle";
+import { PetRemoveDialog } from "@/components/pets/pet-remove-dialog";
 import { PetTabNav } from "@/components/pets/pet-tab-nav";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -20,7 +20,7 @@ export function PetRecordFrame({
   photoUrl,
   basePath,
   canManage = false,
-  canDelete = false,
+  canRemove = false,
   children,
 }: {
   pet: PetDetail;
@@ -28,8 +28,8 @@ export function PetRecordFrame({
   basePath: string;
   /** Clinic staff only — shows the archive/restore toggle. Never shown to the pet's owner. */
   canManage?: boolean;
-  /** The pet's own owner — shows their delete option. Never shown alongside canManage. */
-  canDelete?: boolean;
+  /** The owner's own portal — shows the delete control. Never shown to clinic staff, who archive instead. */
+  canRemove?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -72,7 +72,8 @@ export function PetRecordFrame({
         </Link>
 
         {canManage ? <PetArchiveToggle petId={pet.id} isActive={pet.isActive} /> : null}
-        {canDelete ? <DeletePetDialog petId={pet.id} petName={pet.name} /> : null}
+
+        {canRemove ? <PetRemoveDialog petId={pet.id} petName={pet.name} /> : null}
       </div>
 
       <PetTabNav basePath={basePath} />

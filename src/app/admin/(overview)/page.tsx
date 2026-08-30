@@ -20,8 +20,8 @@ import { AttentionCard } from "@/components/dashboard/attention-card";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { countAppointments } from "@/features/appointments/queries";
 import { getAdminOperationalSummary, getAdminOverview, getAdminRevenue, getRecentActivity, type Metric } from "@/features/dashboard/queries";
-import { ACCESS } from "@/features/auth/access";
-import { hasRole, requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
+import { hasRole } from "@/features/auth/session";
 import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
 import { listOpenDiagnosticsQueue } from "@/features/soap/queries";
 import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
@@ -40,7 +40,7 @@ import { getDueInfo } from "@/lib/due-window";
  * it links to, and the queries behind a hidden block are never run.
  */
 export default async function AdminDashboardPage() {
-  const user = await requireRole(...ACCESS.shared);
+  const user = await requireAccess("shared");
 
   const organizationId = user.organizationIds[0];
   const isAdmin = hasRole(user, "admin", "super_admin");

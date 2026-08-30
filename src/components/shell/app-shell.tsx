@@ -32,7 +32,7 @@ export function AppShell({
           </Link>
         </div>
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks areaKey={area.key} roles={user.roles} />
+          <NavLinks areaKey={area.key} roles={user.roles} permissions={user.permissions} />
         </div>
         <div className="border-t p-3">
           {area.key !== "client" ? (
@@ -50,7 +50,7 @@ export function AppShell({
 
       <div className="flex min-h-svh flex-col">
         <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-10 flex items-center gap-2 border-b px-2 py-2 backdrop-blur lg:hidden">
-          <MobileNav areaKey={area.key} roles={user.roles} />
+          <MobileNav areaKey={area.key} roles={user.roles} permissions={user.permissions} />
           <Link href={area.href} className="grid leading-tight">
             <span className="text-sm font-semibold tracking-tight">TV Care</span>
             <span className="text-muted-foreground text-xs">{area.label}</span>
@@ -112,7 +112,7 @@ function UserPanel({ user, profileHref }: { user: SessionUser; profileHref: stri
             Sign out
           </Button>
         </form>
-        <ThemeToggle size="icon-sm" />
+        <ThemeToggle />
       </div>
     </div>
   );

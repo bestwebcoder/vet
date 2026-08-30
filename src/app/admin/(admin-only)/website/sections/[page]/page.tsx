@@ -5,15 +5,19 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import { PageContentForm, type PageContentFieldView } from "@/components/page-sections/page-content-form";
 import { PageSectionEditor } from "@/components/page-sections/page-section-editor";
+import { ServiceSectionManager, type ServiceSection } from "@/components/services/service-section-manager";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { requireRole } from "@/features/auth/session";
 import { getOwnOrganization } from "@/features/organizations/queries";
 import { listPageSectionItemsForAdmin } from "@/features/page-sections/queries";
+import { listAllCategories } from "@/features/service-categories/queries";
+import { listAllServices } from "@/features/services/queries";
 import { siteContentFieldsFor } from "@/features/site-content/fields";
 import { getSiteContentForAdmin } from "@/features/site-content/queries";
 import { PAGE_SECTIONS, isEditorPageKey, isPageKey, pageDefinition } from "@/lib/page-sections";
+import { categoriesFor, categoriesForCatalogue, intoCategories } from "@/lib/service-pages";
 
 /** Every page's editor is this one route — one entry per page in the registry. */
 export function generateStaticParams() {
@@ -55,13 +59,44 @@ export default async function AdminWebsitePageEditor({ params }: PageProps<"/adm
 
   const contentFields = siteContentFieldsFor(page);
 
-  // The footer has no card list, so it never queries a table no row of it
-  // could be in — see EDITOR_PAGE_KEYS.
-  const [organization, siteContent, itemsBySection] = await Promise.all([
+  // Each read is skipped on a page that cannot have that thing: the footer has
+  // no card list, so it never queries a table no row of it could be in (see
+  // EDITOR_PAGE_KEYS), and only a page that renders service blocks reads the
+  // catalogue.
+  const [organization, siteContent, itemsBySection, categories, services] = await Promise.all([
     getOwnOrganization(organizationId),
     getSiteContentForAdmin(organizationId),
     isPageKey(page) ? listPageSectionItemsForAdmin(organizationId, page) : Promise.resolve(null),
+    definition.serviceSections ? listAllCategories() : Promise.resolve(null),
+    definition.serviceSections ? listAllServices() : Promise.resolve(null),
   ]);
+
+  /**
+   * The page's blocks, in the order it renders them, each paired with the
+   * category record behind its heading so the heading is editable too.
+   *
+   * Grouped by the same function the public page uses, so the editor cannot
+   * drift out of step with what a visitor sees — including which categories
+   * have left this page for one of their own.
+   */
+  const serviceSections: ServiceSection[] | null =
+    categories === null || services === null || categories.status === "error" || services.status === "error"
+      ? null
+      : (() => {
+          const grouped = intoCategories(services.data);
+          const forThisPage =
+            definition.serviceSections === "catalogue"
+              ? categoriesForCatalogue(grouped)
+              : categoriesFor(grouped, definition.href);
+
+          return forThisPage.map((group) => ({
+            category: categories.data.find((candidate) => candidate.id === group.key) ?? null,
+            heading: group.name,
+            description: group.description,
+            icon: group.icon,
+            services: group.services,
+          }));
+        })();
 
   const practiceName = organization.status === "ok" ? (organization.data?.name ?? "The Traveling Vet") : "The Traveling Vet";
 
@@ -147,6 +182,25 @@ export default async function AdminWebsitePageEditor({ params }: PageProps<"/adm
                   </TabsPanel>
                 ))}
               </Tabs>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {definition.serviceSections ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Service blocks</CardTitle>
+            <CardDescription>
+              How each service reads on this page — its title, tagline, list of points and fee lines. Price, duration
+              and booking settings live in Services; nothing saved here touches them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {serviceSections === null ? (
+              <ErrorState title="Service blocks could not be loaded" />
+            ) : (
+              <ServiceSectionManager sections={serviceSections} />
             )}
           </CardContent>
         </Card>

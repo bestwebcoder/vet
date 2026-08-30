@@ -38,6 +38,7 @@ export default async function NewPatientForClientPage({
         species={species}
         breeds={breeds}
         clientId={clientId}
+        recordHrefBase="/admin/patients"
         submitLabel="Add patient"
       />
     </div>

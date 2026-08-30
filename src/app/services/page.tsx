@@ -1,172 +1,116 @@
-import { Fragment } from "react";
 import type { Metadata } from "next";
-import { ClipboardList, Home } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
+import { GoldRule, MarketingBand } from "@/components/marketing/marketing-band";
 import { PublicFooter } from "@/components/marketing/public-footer";
 import { PublicHeader } from "@/components/marketing/public-header";
+import { ServiceCategorySection } from "@/components/marketing/service-category-section";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import { SectionCards } from "@/components/marketing/section-cards";
-import { Pagination } from "@/components/search/pagination";
+import { bookingHrefForVisitor } from "@/features/auth/session";
 import { getPublicOrganizationInfo } from "@/features/organizations/queries";
-import { getPublicPageSectionItems, type PageSectionItems } from "@/features/page-sections/queries";
-import { getPublicServices, type ServiceSummary } from "@/features/services/queries";
+import { getPublicServices } from "@/features/services/queries";
 import { siteContentValue } from "@/features/site-content/fields";
 import { getPublicSiteContent } from "@/features/site-content/queries";
+import { categoriesForCatalogue, intoCategories, isAdvisoryCategory } from "@/lib/service-pages";
 
-export const metadata: Metadata = { title: "Services · TV Care" };
-
-/** Three per row on a wide screen, four rows deep. */
-const PAGE_SIZE = 12;
+export const metadata: Metadata = { title: "Our Services · TV Care" };
 
 /**
- * Sorted so a page can be cut anywhere and still read as grouped: category
- * first, then the practice's own sort_order within it, which is the order the
- * query already returns and the order an admin arranged on the Services screen.
+ * The public services page.
+ *
+ * Laid out by category rather than as one paged grid: a practice's catalogue
+ * divides into the kinds of work it does — home care, community work,
+ * consulting — and each of those wants its own heading, its own
+ * blurb, and cards that carry what is included and what it costs.
+ *
+ * Everything on it is database-driven. The categories, their descriptions and
+ * icons, every service, its tagline, its inclusions and its fee all come from
+ * Admin → Services; the headline, intro and closing call to action come from
+ * Admin → Website. Nothing about this practice is written into this file —
+ * which is CLAUDE.md §9.3–9.7, and also the only way the page survives a
+ * price change.
+ *
+ * Categories a practice marks as advisory work get the gold accent and a
+ * two-column grid, because those cards carry longer lists and no figures.
+ * Teaching work leaves this page entirely — it has one of its own, and which
+ * categories those are is decided in src/lib/service-pages.ts.
  */
-function byCategoryThenOrder(a: ServiceSummary, b: ServiceSummary) {
-  const groupA = a.categoryName ?? "Other";
-  const groupB = b.categoryName ?? "Other";
 
-  // "Other" last: it is where anything uncategorised falls, not a heading the
-  // practice chose.
-  if (groupA !== groupB) {
-    if (groupA === "Other") return 1;
-    if (groupB === "Other") return -1;
-    return groupA.localeCompare(groupB);
-  }
-
-  return 0;
-}
-
-/** Consecutive services sharing a category, as they fall on this page. */
-function intoGroups(services: ServiceSummary[]) {
-  const groups: { heading: string; services: ServiceSummary[] }[] = [];
-
-  for (const service of services) {
-    const heading = service.categoryName ?? "Other";
-    const last = groups.at(-1);
-    if (last?.heading === heading) last.services.push(service);
-    else groups.push({ heading, services: [service] });
-  }
-
-  return groups;
-}
-
-export default async function ServicesPage({ searchParams }: PageProps<"/services">) {
+export default async function ServicesPage() {
   const organization = await getPublicOrganizationInfo();
+
   // No practice resolved means nothing to show — never everything.
   const servicesResult = organization
     ? await getPublicServices(organization.id)
     : { status: "ok" as const, data: [] };
+
   const practiceName = organization?.name ?? "The Traveling Vet";
-  const [content, sections] = await Promise.all([
+
+  const [content, bookingHref] = await Promise.all([
     organization ? getPublicSiteContent(organization.id) : Promise.resolve({}),
-    organization ? getPublicPageSectionItems(organization.id, "services") : Promise.resolve<PageSectionItems>({}),
+    bookingHrefForVisitor(),
   ]);
-  const highlights = sections.highlights ?? [];
 
-  const { page: pageParam } = await searchParams;
-  const page = typeof pageParam === "string" ? Math.max(1, Number(pageParam) || 1) : 1;
-
-  const services = servicesResult.status === "ok" ? [...servicesResult.data].sort(byCategoryThenOrder) : [];
-
-  // A page past the end shows the last one rather than an empty grid.
-  const totalPages = Math.max(1, Math.ceil(services.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const groups = intoGroups(services.slice(start, start + PAGE_SIZE));
+  const categories =
+    servicesResult.status === "ok" ? categoriesForCatalogue(intoCategories(servicesResult.data)) : [];
 
   return (
-    <div className="flex min-h-svh flex-col">
-      <PublicHeader practiceName={practiceName} logoUrl={organization?.logoUrl ?? null} organizationId={organization?.id ?? null} />
+    <div className="bg-marketing-parchment flex min-h-svh flex-col">
+      <PublicHeader
+        practiceName={practiceName}
+        logoUrl={organization?.logoUrl ?? null}
+        organizationId={organization?.id ?? null}
+      />
 
       <main className="flex-1">
-        <section className="relative overflow-hidden">
-          <div
-            aria-hidden
-            className="bg-primary/15 pointer-events-none absolute top-[-10rem] left-1/2 size-[28rem] -translate-x-1/2 rounded-full blur-3xl"
-          />
-          <div className="relative mx-auto w-full max-w-3xl px-4 py-16 text-center sm:px-6 sm:py-24">
-            <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">Our services</h1>
-            <p className="text-muted-foreground mt-6 text-lg text-balance">
-              {siteContentValue(content, "services.intro", practiceName)}
-            </p>
-          </div>
-        </section>
+        <MarketingBand
+          eyebrow={siteContentValue(content, "services.hero_eyebrow", practiceName)}
+          title={siteContentValue(content, "services.hero_title", practiceName)}
+          italicTitle={siteContentValue(content, "services.hero_title_italic", practiceName)}
+          subtitle={siteContentValue(content, "services.intro", practiceName)}
+          action={{
+            label: siteContentValue(content, "services.hero_cta", practiceName),
+            href: "/contact",
+          }}
+        />
+        <GoldRule />
 
-        {/* Admin-editable via /admin/website/sections/services — sits above the priced list. */}
-        {highlights.length > 0 ? (
-          <section className="mx-auto w-full max-w-6xl px-4 pb-4 sm:px-6">
-            <SectionCards items={highlights} variant="cards" columns={3} />
-          </section>
-        ) : null}
-
-        <section className="border-border/60 border-t bg-muted/40">
-          <div className="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
-            {servicesResult.status === "error" ? (
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-14">
+          {servicesResult.status === "error" ? (
+            <div className="py-20">
               <ErrorState title="Services could not be loaded" />
-            ) : services.length === 0 ? (
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="py-20">
               <EmptyState
                 icon={ClipboardList}
                 title="No services listed yet"
                 description="Check back soon — our services will appear here once they're set up."
               />
-            ) : (
-              // One continuous grid rather than a grid per category: a heading
-              // spans the full row and the cards keep flowing after it, so a
-              // category with two services no longer leaves a row two-thirds
-              // empty the way a grid of its own did.
-              <div className="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
-                {groups.map((group) => (
-                  <Fragment key={group.heading}>
-                    <div className="col-span-full flex items-baseline gap-3 pt-6 first:pt-0">
-                      <h2 className="text-xl font-semibold tracking-tight">{group.heading}</h2>
-                      <span className="text-muted-foreground text-sm tabular-nums">{group.services.length}</span>
-                    </div>
+            </div>
+          ) : (
+            categories.map((category) => (
+              <ServiceCategorySection
+                key={category.key}
+                name={category.name}
+                description={category.description}
+                icon={category.icon}
+                services={category.services}
+                bookingHref={bookingHref}
+                accent={isAdvisoryCategory(category.name) ? "gold" : "grove"}
+                wide={isAdvisoryCategory(category.name)}
+              />
+            ))
+          )}
+        </div>
 
-                    {group.services.map((service) => (
-                      <Card key={service.id} className="transition-all hover:-translate-y-0.5 hover:shadow-md">
-                        <CardContent className="grid gap-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="font-medium">{service.name}</p>
-                            {service.isHomeVisitAvailable ? (
-                              <Badge variant="secondary">
-                                <Home aria-hidden />
-                                Home visit available
-                              </Badge>
-                            ) : null}
-                          </div>
-                          {service.description ? (
-                            <p className="text-muted-foreground text-sm">{service.description}</p>
-                          ) : null}
-                          <div className="mt-1 flex items-baseline justify-between">
-                            <span className="font-semibold" data-numeric>
-                              {service.price}
-                            </span>
-                            <span className="text-muted-foreground text-sm">{service.durationMinutes} min</span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </Fragment>
-                ))}
-
-                <div className="col-span-full pt-4">
-                <Pagination
-                  basePath="/services"
-                  searchParams={{}}
-                  page={currentPage}
-                  pageSize={PAGE_SIZE}
-                  totalCount={services.length}
-                />
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
+        <MarketingBand
+          size="closing"
+          title={siteContentValue(content, "services.cta_title", practiceName)}
+          subtitle={siteContentValue(content, "services.cta_subtitle", practiceName)}
+          action={{ label: siteContentValue(content, "services.cta_button", practiceName), href: "/contact" }}
+        />
       </main>
 
       <PublicFooter organization={organization} />

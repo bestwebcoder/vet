@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { MAX_HERO_IMAGES } from "@/features/organizations/hero-image";
 import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
@@ -124,6 +126,34 @@ export type PublicOrganizationInfo = {
   logoUrl: string | null;
   footerShowLogo: boolean;
 };
+
+/**
+ * Just the logo, for the favicon in the root layout.
+ *
+ * Deliberately not `getPublicOrganizationInfo()`: that one also fetches the
+ * hero gallery, and the root layout wraps every page in the app — admin and
+ * clinical screens included — so the metadata call must stay one narrow
+ * indexed read. `cache` dedupes it across the layout tree within a render.
+ */
+export const getSiteIconUrl = cache(async (): Promise<string | null> => {
+  const supabase = createServiceClient();
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("logo_path, updated_at")
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[organizations] site icon failed", error);
+    return null;
+  }
+
+  return data?.logo_path ? siteImagePublicUrl(data.logo_path, data.updated_at) : null;
+});
 
 /**
  * For every signed-out public page — reached before any session exists, so

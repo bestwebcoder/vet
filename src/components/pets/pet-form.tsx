@@ -1,12 +1,23 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 
 import { DatePicker } from "@/components/form/date-picker";
 import { Field } from "@/components/form/field";
 import { FormAlert } from "@/components/form/form-alert";
 import { SubmitButton } from "@/components/form/submit-button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { ImageCropField } from "@/components/media/image-crop-field";
 import { SelectField } from "@/components/form/select-field";
@@ -27,8 +38,18 @@ type PetFormProps = {
   clientId?: string;
   /** Owner picker, when the owner is not already decided by the route. */
   ownerSection?: React.ReactNode;
+  /**
+   * Where this audience reads a patient record, e.g. `/client/pets`. Set on the
+   * routes that create one: the form then confirms the save and takes the
+   * person to the record it just made, rather than leaving them looking at a
+   * form they have already submitted.
+   */
+  recordHrefBase?: string;
   submitLabel?: string;
 };
+
+/** Long enough to read the confirmation, short enough not to feel stuck. */
+const REDIRECT_DELAY_MS = 1600;
 
 /**
  * One form for creating and editing a patient, so the two can never disagree
@@ -41,10 +62,28 @@ export function PetForm({
   pet,
   clientId,
   ownerSection,
+  recordHrefBase,
   submitLabel = "Save pet",
 }: PetFormProps) {
+  const router = useRouter();
   const [state, formAction] = useActionState(action, idleState);
   const fieldErrors = state.status === "error" ? state.fieldErrors : undefined;
+
+  const savedId = state.status === "success" ? state.id : undefined;
+  const savedMessage = state.status === "success" ? state.message : undefined;
+  const savedWarning = state.status === "success" ? state.warning : undefined;
+  const recordHref = recordHrefBase && savedId ? `${recordHrefBase}/${savedId}` : undefined;
+
+  // A save that lost the photo waits for a deliberate click: that sentence has
+  // to be read before the screen changes under it.
+  useEffect(() => {
+    if (!recordHref || savedWarning) return;
+
+    router.prefetch(recordHref);
+    const timer = setTimeout(() => router.push(recordHref), REDIRECT_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [recordHref, savedWarning, router]);
 
   const [speciesId, setSpeciesId] = useState(pet?.speciesId ?? "");
   const [isEstimated, setIsEstimated] = useState(pet?.isDateOfBirthEstimated ?? false);
@@ -64,7 +103,7 @@ export function PetForm({
 
       <CardContent>
         <form action={formAction} className="grid gap-5" noValidate>
-          <FormAlert state={state} />
+          {recordHref ? null : <FormAlert state={state} />}
 
           {pet ? <input type="hidden" name="petId" value={pet.id} /> : null}
           {clientId ? <input type="hidden" name="clientId" value={clientId} /> : null}
@@ -209,6 +248,30 @@ export function PetForm({
           <SubmitButton pendingLabel="Saving…">{submitLabel}</SubmitButton>
         </form>
       </CardContent>
+
+      {recordHref ? (
+        <Dialog
+          open
+          // Dismissing is a way of saying "yes, take me there" — the record is
+          // saved either way, and there is nothing left on the form to return to.
+          onOpenChange={() => router.push(recordHref)}
+        >
+          <DialogContent showCloseButton={false} className="text-center">
+            <DialogHeader className="items-center gap-2">
+              <CheckCircle2 className="text-primary size-9" aria-hidden />
+              <DialogTitle>{savedMessage ?? "Saved."}</DialogTitle>
+              <DialogDescription>
+                {savedWarning ?? "Taking you to their record…"}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" size="touch" className="w-full" onClick={() => router.push(recordHref)}>
+                View record
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </Card>
   );
 }

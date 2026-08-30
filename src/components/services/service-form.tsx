@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 
 import { Field } from "@/components/form/field";
 import { FormAlert } from "@/components/form/form-alert";
+import { RepeatableField } from "@/components/form/repeatable-field";
 import { SelectField } from "@/components/form/select-field";
 import { SubmitButton } from "@/components/form/submit-button";
 import { TextAreaField } from "@/components/form/textarea-field";
@@ -100,6 +101,75 @@ function ServiceFields({
           Requires a doctor
         </label>
       </div>
+
+      {/* ── How this service reads on the public page ─────────────────────
+          Separated from the fields above because they answer a different
+          question. Everything above decides what happens when this service is
+          booked and invoiced; everything below is what a prospective client
+          reads on /services. All of it is optional — a service with none of it
+          shows its name, its description and its price, as it always did. */}
+      <div className="border-border/60 grid gap-4 border-t pt-4">
+        <div>
+          <p className="text-sm font-medium">Public services page</p>
+          <p className="text-muted-foreground text-sm">
+            Optional. How this service appears on your website — none of it changes what a booking is charged.
+          </p>
+        </div>
+
+        <Field
+          label="Tagline"
+          name="tagline"
+          defaultValue={defaults?.tagline ?? ""}
+          hint="The italic line under the name. For example “Regular wellness support for sustained physical and emotional health”."
+          errors={errors?.tagline}
+        />
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            label="List heading"
+            name="inclusionsLabel"
+            defaultValue={defaults?.inclusionsLabel ?? ""}
+            hint="“What’s included” if left blank. Training uses “Topics covered”."
+            errors={errors?.inclusionsLabel}
+          />
+          <Field
+            label="Fee label"
+            name="feeLabel"
+            defaultValue={defaults?.feeLabel ?? ""}
+            hint="“Fee” if left blank. Use “Monthly fee” for a programme."
+            errors={errors?.feeLabel}
+          />
+        </div>
+
+        <RepeatableField
+          label="What this includes"
+          name="inclusion"
+          placeholder="Full physical examination"
+          hint="One point per line. Up to 12."
+          defaultValues={(defaults?.inclusions ?? []).map((value) => ({ value }))}
+          addLabel="Add a point"
+        />
+
+        <RepeatableField
+          label="Fee shown on the website"
+          name="feeAmount"
+          placeholder="6,000 – 8,000 BDT"
+          secondName="feeQualifier"
+          secondPlaceholder="single pet"
+          hint="Free text, so a range or “Fee upon enquiry” both work. Leave empty to show the price above. Up to 4 lines."
+          max={4}
+          defaultValues={(defaults?.feeTiers ?? []).map((tier) => ({ value: tier.amount, second: tier.qualifier }))}
+          addLabel="Add a fee line"
+        />
+
+        <Field
+          label="Fee note"
+          name="feeNote"
+          defaultValue={defaults?.feeNote ?? ""}
+          hint="For example “Medication and laboratory costs excluded”."
+          errors={errors?.feeNote}
+        />
+      </div>
     </div>
   );
 }
@@ -119,7 +189,12 @@ function AddServiceForm({ categories }: { categories: ServiceCategory[] }) {
   );
 }
 
-function ToggleActiveButton({ service }: { service: ServiceSummary }) {
+/**
+ * Exported alongside DeleteServiceDialog because the website editor offers
+ * the same two decisions about a block — take it off the page, or remove it
+ * for good — and they are the same decisions about the same record.
+ */
+export function ToggleServiceActiveButton({ service }: { service: ServiceSummary }) {
   const [, formAction] = useActionState(toggleServiceActiveAction, idleState);
 
   return (
@@ -133,7 +208,7 @@ function ToggleActiveButton({ service }: { service: ServiceSummary }) {
   );
 }
 
-function DeleteServiceDialog({ service }: { service: ServiceSummary }) {
+export function DeleteServiceDialog({ service }: { service: ServiceSummary }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(deleteServiceAction, idleState);
 
@@ -189,7 +264,7 @@ function ServiceRow({ service, categories }: { service: ServiceSummary; categori
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <ToggleActiveButton service={service} />
+            <ToggleServiceActiveButton service={service} />
             <DeleteServiceDialog service={service} />
           </div>
         </div>

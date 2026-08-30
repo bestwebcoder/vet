@@ -21,6 +21,7 @@ export const RESERVED_PAGE_SLUGS = [
   "doctors",
   "no-access",
   "services",
+  "training-education",
   "login",
   "register",
   "forgot-password",

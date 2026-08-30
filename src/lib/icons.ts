@@ -1,9 +1,12 @@
 import {
   Award,
   Bell,
+  Building2,
   Clock,
   FileText,
+  GraduationCap,
   Heart,
+  HeartHandshake,
   Home,
   MapPin,
   PawPrint,
@@ -39,6 +42,9 @@ export const ICON_OPTIONS: { key: string; label: string; icon: LucideIcon }[] = 
   { key: "award", label: "Award", icon: Award },
   { key: "map-pin", label: "Location", icon: MapPin },
   { key: "phone", label: "Phone", icon: Phone },
+  { key: "graduation-cap", label: "Training", icon: GraduationCap },
+  { key: "building", label: "Clinic building", icon: Building2 },
+  { key: "heart-handshake", label: "Community", icon: HeartHandshake },
 ];
 
 export const ICON_KEYS = ICON_OPTIONS.map((option) => option.key) as [string, ...string[]];

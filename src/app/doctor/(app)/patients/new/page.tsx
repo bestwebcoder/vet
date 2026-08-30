@@ -46,6 +46,7 @@ export default async function DoctorNewPatientPage() {
         ownerSection={
           <OwnerChooser clients={owners} organizationId={user.organizationIds[0]} />
         }
+        recordHrefBase="/doctor/patients"
         submitLabel="Add patient"
       />
     </div>

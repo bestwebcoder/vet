@@ -1,26 +1,28 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Moon, Sun, SunMoon } from "lucide-react";
+import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
-import { Button, type buttonVariants } from "@/components/ui/button";
-import type { VariantProps } from "class-variance-authority";
-
-const NEXT: Record<string, "light" | "dark" | "system"> = {
-  light: "dark",
-  dark: "system",
-  system: "light",
-};
-
-const ICON = { light: Sun, dark: Moon, system: SunMoon };
-const LABEL = { light: "Light theme", dark: "Dark theme", system: "System theme" };
+import { cn } from "@/lib/utils";
 
 const subscribe = () => () => {};
 
-/** Cycles light → dark → system on click. Renders a stable placeholder until mounted, since the real theme is only known client-side. */
-export function ThemeToggle({ size = "icon" }: { size?: VariantProps<typeof buttonVariants>["size"] }) {
-  const { theme, setTheme } = useTheme();
+/**
+ * A two-position slider between light and dark — both choices are visible, and
+ * the thumb slides between them.
+ *
+ * "System" is deliberately not a third position: it stays the default for
+ * someone who has never touched this (see ThemeProvider), but once they do
+ * choose, the choice is explicit and sticks. A three-way cycle through a
+ * single button meant you could not tell what the next click would give you.
+ *
+ * Reads `resolvedTheme` rather than `theme`, so an untouched "system" still
+ * shows the side the viewer is actually looking at.
+ */
+export function ThemeToggle({ className }: { className?: string }) {
+  const { resolvedTheme, setTheme } = useTheme();
   // True only once the client has hydrated — server and client snapshots
   // deliberately differ so this stays false during the first client render,
   // matching the server-rendered placeholder before the real theme is known.
@@ -30,18 +32,38 @@ export function ThemeToggle({ size = "icon" }: { size?: VariantProps<typeof butt
     () => false,
   );
 
-  const current = mounted ? ((theme as "light" | "dark" | "system") ?? "system") : "system";
-  const Icon = ICON[current];
+  // Same box either way, so hydrating the real control shifts nothing around it.
+  const track = cn("bg-input dark:bg-input/60 relative inline-flex h-8 w-14 shrink-0 items-center rounded-full", className);
+
+  if (!mounted) return <span className={track} aria-hidden />;
+
+  const isDark = resolvedTheme === "dark";
 
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size={size}
-      aria-label={`Theme: ${LABEL[current]}. Click to change.`}
-      onClick={() => setTheme(NEXT[current])}
+    <SwitchPrimitive.Root
+      checked={isDark}
+      onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")}
+      aria-label={isDark ? "Dark theme. Switch to light." : "Light theme. Switch to dark."}
+      className={cn(
+        track,
+        "group focus-visible:ring-ring/50 cursor-pointer border border-transparent transition-colors outline-none focus-visible:ring-3",
+      )}
     >
-      {mounted ? <Icon aria-hidden /> : <span className="size-4" aria-hidden />}
-    </Button>
+      {/* Above the thumb, so whichever icon it slides under stays legible. */}
+      <Sun
+        className="text-primary-foreground group-data-checked:text-muted-foreground pointer-events-none absolute left-2 z-10 size-4 transition-colors"
+        aria-hidden
+      />
+      <Moon
+        className="text-muted-foreground group-data-checked:text-primary-foreground pointer-events-none absolute right-2 z-10 size-4 transition-colors"
+        aria-hidden
+      />
+      {/* Sage rather than `bg-background`: the knob has to read against the
+          track in both themes, and a background-coloured knob vanishes into
+          the dark track. Primary is darker than the track in light and
+          lighter in dark, so `primary-foreground` carries the active icon
+          either way. */}
+      <SwitchPrimitive.Thumb className="bg-primary pointer-events-none block size-7 translate-x-0.5 rounded-full shadow-sm ring-0 transition-transform data-checked:translate-x-[26px]" />
+    </SwitchPrimitive.Root>
   );
 }

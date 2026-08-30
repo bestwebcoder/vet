@@ -11,6 +11,7 @@ export const ROSTER_TAB_LABELS: Record<RosterTab, string> = {
   finance_manager: "Finance",
   lab: "Lab",
   receptionist: "Reception",
+  custom: "Custom roles",
   none: "No role",
 };
 

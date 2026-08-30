@@ -18,15 +18,18 @@ import { cn } from "@/lib/utils";
 export function NavLinks({
   areaKey,
   roles,
+  permissions = [],
   onNavigate,
 }: {
   areaKey: Area["key"];
   /** Plain slugs, so this stays serializable across the server/client boundary. */
   roles: RoleSlug[];
+  /** Permission keys, for the roles a practice defined itself. Plain strings, same reason. */
+  permissions?: string[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const items = navFor(areaKey, roles);
+  const items = navFor(areaKey, roles, permissions);
 
   return (
     <nav className="grid gap-1" aria-label="Main">

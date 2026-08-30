@@ -19,11 +19,12 @@ export const PAGE_KEYS = ["home", "about", "services", "contact"] as const;
 export type PageKey = (typeof PAGE_KEYS)[number];
 
 /**
- * Every page the website editor offers. The footer is here because it has
- * editable text like the others, but it is not a PageKey: it has no card list,
- * so no row ever names it, and it is not in the table's constraint.
+ * Every page the website editor offers. Training and the footer are here
+ * because they have editable text like the others, but neither is a PageKey:
+ * neither has a card list, so no row ever names them, and neither is in the
+ * table's constraint.
  */
-export const EDITOR_PAGE_KEYS = [...PAGE_KEYS, "footer"] as const;
+export const EDITOR_PAGE_KEYS = [...PAGE_KEYS, "training", "footer"] as const;
 export type EditorPageKey = (typeof EDITOR_PAGE_KEYS)[number];
 
 export type SectionDefinition = {
@@ -47,6 +48,13 @@ export type PageDefinition = {
   href: string;
   /** One line under the heading, and on the card that links here from /admin/website. */
   blurb: string;
+  /**
+   * Set when the page renders service categories, and says which ones it gets:
+   * "catalogue" is everything without a page of its own, "dedicated" is the
+   * categories claimed by this page's href — see src/lib/service-pages.ts.
+   * Those blocks are edited here as well as in Admin → Services.
+   */
+  serviceSections?: "catalogue" | "dedicated";
   sections: SectionDefinition[];
 };
 
@@ -95,16 +103,26 @@ export const PAGE_SECTIONS: PageDefinition[] = [
     key: "services",
     label: "Services page",
     href: "/services",
-    blurb: "The introduction, and the highlight cards above the priced service list.",
-    sections: [
-      {
-        key: "highlights",
-        label: "Service highlights",
-        description:
-          "Cards above the priced list — how visits work, what to bring, anything the price list itself cannot say. Leave empty and nothing renders.",
-        usesIcon: true,
-      },
-    ],
+    blurb: "The introduction, the closing call to action, and every service block on the page.",
+    serviceSections: "catalogue",
+    /**
+     * No card list. It used to carry "Service highlights" — a row of cards
+     * above the catalogue — and those were replaced by the service blocks
+     * themselves, which say the same kind of thing about the actual services
+     * rather than alongside them. The `highlights` key stays allowed in the
+     * database (20260916000100_page_sections.sql) so existing rows are kept
+     * rather than dropped; nothing reads them.
+     */
+    sections: [],
+  },
+  {
+    key: "training",
+    label: "Training & Education page",
+    href: "/training-education",
+    blurb: "The hero, the closing call to action, and the wording of every programme block on the page.",
+    serviceSections: "dedicated",
+    // No card lists of its own — the blocks are services.
+    sections: [],
   },
   {
     key: "contact",

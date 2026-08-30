@@ -7,8 +7,7 @@ import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listBranches } from "@/features/clients/queries";
 import { listDoctorsForAdmin } from "@/features/doctors/queries";
 import { cn } from "@/lib/utils";
@@ -17,7 +16,7 @@ import { UserRound } from "lucide-react";
 export const metadata: Metadata = { title: "Doctors · TV Care" };
 
 export default async function AdminDoctorsPage({ searchParams }: PageProps<"/admin/doctors">) {
-  await requireRole(...ACCESS.reception);
+  await requireAccess("reception");
   const { show, page: pageParam } = await searchParams;
   const show_ = typeof show === "string" ? show : undefined;
   const includeInactive = show_ === "all";

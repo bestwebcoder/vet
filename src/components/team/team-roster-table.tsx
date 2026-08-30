@@ -24,9 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { deleteTeamMemberAction, setTeamRoleAction } from "@/features/team/actions";
 import type { TeamMember } from "@/features/team/queries";
 import { idleState } from "@/lib/forms";
-import { roleOptions } from "@/lib/validation/team";
-
-const ROLE_OPTIONS = roleOptions("No role");
+import { NO_ROLE, roleOptions, type RoleOption } from "@/lib/validation/team";
 
 function SaveButton() {
   const { pending } = useFormStatus();
@@ -84,7 +82,7 @@ function DeactivateTeamMemberDialog({ member }: { member: TeamMember }) {
   );
 }
 
-function TeamMemberRow({ member }: { member: TeamMember }) {
+function TeamMemberRow({ member, roles }: { member: TeamMember; roles: RoleOption[] }) {
   const [state, formAction] = useActionState(setTeamRoleAction, idleState);
 
   return (
@@ -106,7 +104,13 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
                 otherwise keep showing whatever was last selected instead of
                 what actually saved — reading as "the role didn't save" even
                 though it did. */}
-            <SelectField key={member.role} label="Role" name="role" options={ROLE_OPTIONS} defaultValue={member.role} />
+            <SelectField
+              key={member.roleId ?? NO_ROLE}
+              label="Role"
+              name="role"
+              options={roleOptions("No role", roles)}
+              defaultValue={member.roleId ?? NO_ROLE}
+            />
           </div>
           <SaveButton />
         </form>
@@ -138,7 +142,7 @@ function TeamMemberRow({ member }: { member: TeamMember }) {
  * (/admin/doctors, /admin/clients) and deliberately do not appear here —
  * see src/features/team/queries.ts.
  */
-export function TeamRosterTable({ members }: { members: TeamMember[] }) {
+export function TeamRosterTable({ members, roles }: { members: TeamMember[]; roles: RoleOption[] }) {
   if (members.length === 0) {
     return (
       <EmptyState
@@ -160,7 +164,7 @@ export function TeamRosterTable({ members }: { members: TeamMember[] }) {
       </TableHeader>
       <TableBody>
         {members.map((member) => (
-          <TeamMemberRow key={member.userId} member={member} />
+          <TeamMemberRow key={member.userId} member={member} roles={roles} />
         ))}
       </TableBody>
     </Table>

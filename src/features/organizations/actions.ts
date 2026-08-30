@@ -265,7 +265,7 @@ export async function updateLogoImageAction(_previous: FormState, formData: Form
   revalidatePath("/admin/settings");
   // Shown in the header of every public page, not just Home — each fetches
   // its own organization data independently, so each needs its own revalidate.
-  for (const path of ["/", "/about", "/services", "/contact", "/doctors"]) {
+  for (const path of ["/", "/about", "/services", "/training-education", "/contact", "/doctors"]) {
     revalidatePath(path);
   }
   return { status: "success", message: "Logo updated." };
@@ -286,7 +286,7 @@ export async function updateFooterShowLogoAction(_previous: FormState, formData:
     return failure("organizations", error, "We could not save that just now. Please try again.");
   }
 
-  for (const path of ["/", "/about", "/services", "/contact", "/doctors"]) {
+  for (const path of ["/", "/about", "/services", "/training-education", "/contact", "/doctors"]) {
     revalidatePath(path);
   }
   return { status: "success", message: showLogo ? "Footer logo shown." : "Footer logo hidden." };

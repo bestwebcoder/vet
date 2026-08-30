@@ -7,6 +7,9 @@ import { createServiceClient } from "@/lib/supabase/service";
  * adds pricing and category so the same table now also drives billing.
  */
 
+/** Display-only pricing. Billing never reads this — see the migration. */
+export type FeeTier = { amount: string; qualifier: string | null };
+
 export type ServiceSummary = {
   id: string;
   name: string;
@@ -14,6 +17,17 @@ export type ServiceSummary = {
   durationMinutes: number;
   categoryId: string | null;
   categoryName: string | null;
+  categoryDescription: string | null;
+  categoryIcon: string | null;
+  categorySortOrder: number;
+  /** The line under the name on the public page. */
+  tagline: string | null;
+  /** The practice's own word for the bullet list — "Topics Covered" and so on. */
+  inclusionsLabel: string | null;
+  inclusions: string[];
+  feeLabel: string | null;
+  feeTiers: FeeTier[];
+  feeNote: string | null;
   pricePaisa: number;
   price: string;
   taxRatePercent: number;
@@ -31,12 +45,36 @@ export type PaginatedResult<T> =
 const SERVICE_COLUMNS = `
   id, name, description, duration_minutes, category_id, price_paisa, tax_rate_percent,
   is_home_visit_available, is_home_visit_fee, requires_doctor, is_active,
-  category:category_id (name)
+  tagline, inclusions_label, inclusions, fee_label, fee_tiers, fee_note,
+  category:category_id (name, description, icon, sort_order)
 `;
 
-type Related = { name: string } | { name: string }[] | null;
+type CategoryRow = { name: string; description: string | null; icon: string | null; sort_order: number };
+type Related = CategoryRow | CategoryRow[] | null;
 function one(value: Related) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+/**
+ * jsonb arrives as whatever was written. These read it defensively rather
+ * than trusting the column: a malformed value must render as an empty list on
+ * a public page, not throw and take the whole page with it.
+ */
+function toStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "");
+}
+
+function toFeeTiers(value: unknown): FeeTier[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry) => {
+    if (typeof entry !== "object" || entry === null) return [];
+    const { amount, qualifier } = entry as { amount?: unknown; qualifier?: unknown };
+    if (typeof amount !== "string" || amount.trim() === "") return [];
+
+    return [{ amount, qualifier: typeof qualifier === "string" && qualifier.trim() !== "" ? qualifier : null }];
+  });
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by the select above */
@@ -50,6 +88,16 @@ function toSummary(row: any): ServiceSummary {
     durationMinutes: row.duration_minutes,
     categoryId: row.category_id,
     categoryName: category?.name ?? null,
+    categoryDescription: category?.description ?? null,
+    categoryIcon: category?.icon ?? null,
+    // Uncategorised sorts last, matching how the page groups it.
+    categorySortOrder: category?.sort_order ?? Number.MAX_SAFE_INTEGER,
+    tagline: row.tagline ?? null,
+    inclusionsLabel: row.inclusions_label ?? null,
+    inclusions: toStrings(row.inclusions),
+    feeLabel: row.fee_label ?? null,
+    feeTiers: toFeeTiers(row.fee_tiers),
+    feeNote: row.fee_note ?? null,
     pricePaisa: row.price_paisa,
     price: formatCurrency(row.price_paisa),
     taxRatePercent: Number(row.tax_rate_percent),

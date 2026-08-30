@@ -10,7 +10,7 @@
  * show a page's text and its card lists together — they are two halves of the
  * same page, and were previously edited in two different places.
  */
-export type SiteContentPage = "home" | "about" | "services" | "contact" | "footer";
+export type SiteContentPage = "home" | "about" | "services" | "training" | "contact" | "footer";
 
 export type SiteContentField = {
   key: string;
@@ -64,12 +64,109 @@ export const SITE_CONTENT_FIELDS: SiteContentField[] = [
       "Booking is simple: choose a doctor, a time, and whether you'd rather come to the clinic or have the doctor come to you. From there, everything about that visit — the assessment, any prescription, vaccinations given, and the invoice — is recorded against your pet's own account, so you and your care team can always see the full picture.\n\nWe track vaccination and deworming schedules for you and send a reminder before the next one is due, so nothing falls through between visits.",
   },
   {
+    key: "services.hero_eyebrow",
+    page: "services",
+    label: "Hero eyebrow",
+    defaultValue: () => "Our Services",
+  },
+  {
+    key: "services.hero_title",
+    page: "services",
+    label: "Hero headline (first line)",
+    defaultValue: () => "Compassionate Veterinary Care",
+  },
+  {
+    key: "services.hero_title_italic",
+    page: "services",
+    label: "Hero headline (second line, italic)",
+    defaultValue: () => "Delivered to Your Doorstep",
+  },
+  {
     key: "services.intro",
     page: "services",
-    label: "Introduction",
+    label: "Hero introduction",
     multiline: true,
-    defaultValue: (name) =>
-      `Every service ${name} offers, with real pricing — clinic and home visits both available where noted.`,
+    defaultValue: () =>
+      "Professional, personalised veterinary care in the comfort of your home — from preventive wellness to specialised consultations and clinical training.",
+  },
+  {
+    key: "services.hero_cta",
+    page: "services",
+    label: "Hero button",
+    defaultValue: () => "Schedule a Home Visit",
+  },
+  {
+    key: "services.cta_title",
+    page: "services",
+    label: "Closing call-to-action headline",
+    defaultValue: () => "Need Veterinary Care at Home?",
+  },
+  {
+    key: "services.cta_subtitle",
+    page: "services",
+    label: "Closing call-to-action text",
+    multiline: true,
+    defaultValue: () =>
+      "Contact us to schedule an appointment and provide your pet with personalised, professional care in a comfortable and familiar environment.",
+  },
+  {
+    key: "services.cta_button",
+    page: "services",
+    label: "Closing call-to-action button",
+    defaultValue: () => "Book a Home Visit",
+  },
+  {
+    key: "training.hero_eyebrow",
+    page: "training",
+    label: "Hero eyebrow",
+    defaultValue: () => "Training & Education",
+  },
+  {
+    key: "training.hero_title",
+    page: "training",
+    label: "Hero headline (first line)",
+    defaultValue: () => "Veterinary Knowledge",
+  },
+  {
+    key: "training.hero_title_italic",
+    page: "training",
+    label: "Hero headline (second line, italic)",
+    defaultValue: () => "Shared and Practised",
+  },
+  {
+    key: "training.intro",
+    page: "training",
+    label: "Hero introduction",
+    multiline: true,
+    // Empty by default: the page falls back to the category's own description
+    // from Admin → Services rather than saying it twice in different words.
+    defaultValue: () => "",
+  },
+  {
+    key: "training.hero_cta",
+    page: "training",
+    label: "Hero button",
+    defaultValue: () => "Enquire About Training",
+  },
+  {
+    key: "training.cta_title",
+    page: "training",
+    label: "Closing call-to-action headline",
+    defaultValue: () => "Planning Training for Your Team?",
+  },
+  {
+    key: "training.cta_subtitle",
+    page: "training",
+    label: "Closing call-to-action text",
+    multiline: true,
+    defaultValue: () =>
+      "Tell us who you are training and what you would like covered, and we will put together a programme that fits your schedule.",
+  },
+  {
+    key: "training.cta_button",
+    page: "training",
+    label: "Closing call-to-action button",
+    defaultValue: () => "Get in Touch",
   },
   {
     key: "contact.intro",
