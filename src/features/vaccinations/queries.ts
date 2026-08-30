@@ -133,6 +133,12 @@ export async function listPetVaccinationStatuses(petIds: string[]): Promise<Resu
 }
 
 export type PetDueVaccination = {
+  /**
+   * The vaccination record this due date came from — the view is one row per
+   * pet, but that row is a real record, and the admin worklist offers to
+   * remove it.
+   */
+  vaccinationId: string;
   petId: string;
   petName: string;
   vaccineName: string;
@@ -157,7 +163,7 @@ export async function listPracticeVaccinationStatuses(): Promise<Result<PetDueVa
 
   const { data, error } = await supabase
     .from("pet_vaccination_status")
-    .select("pet_id, vaccine_name, next_due_date")
+    .select("vaccination_id, pet_id, vaccine_name, next_due_date")
     .not("next_due_date", "is", null)
     .lte("next_due_date", cutoff.toISOString().slice(0, 10));
 
@@ -182,6 +188,7 @@ export async function listPracticeVaccinationStatuses(): Promise<Result<PetDueVa
   return {
     status: "ok",
     data: rows.map((row) => ({
+      vaccinationId: row.vaccination_id,
       petId: row.pet_id,
       petName: nameById.get(row.pet_id) ?? "Unknown patient",
       vaccineName: row.vaccine_name,

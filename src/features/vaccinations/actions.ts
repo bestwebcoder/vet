@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { requireRole } from "@/features/auth/session";
 import { failure, invalid, text, type FormState } from "@/lib/forms";
 import { createClient } from "@/lib/supabase/server";
 import { vaccinationEntrySchema, vaccinationEntryToRow } from "@/lib/validation/vaccination";
@@ -120,5 +121,45 @@ export async function removeVaccinationAction(_previous: FormState, formData: Fo
   if (!data) return { status: "error", message: "You do not have access to this vaccination." };
 
   revalidateVaccinationPaths(appointmentId, petId);
+  return { status: "success", message: "Vaccination removed." };
+}
+
+/**
+ * Removes a vaccination record from the practice-wide worklist.
+ *
+ * The doctor-side `removeVaccinationAction` above writes `deleted_at`
+ * directly, which only a doctor's row level security policy allows. An
+ * administrator correcting a mistaken entry goes through
+ * `delete_vaccination` instead: the same soft delete, audited the same way,
+ * but the one write an admin has on the row — the clinical fields stay the
+ * attending veterinarian's (CLAUDE.md §3, §11).
+ */
+export async function deleteVaccinationRecordAction(_previous: FormState, formData: FormData): Promise<FormState> {
+  await requireRole("admin", "super_admin");
+
+  const vaccinationId = text(formData, "vaccinationId");
+  if (!vaccinationId) return { status: "error", message: "We could not tell which vaccination to remove." };
+
+  const supabase = await createClient();
+
+  // Read the record first so every screen showing it is revalidated, and so a
+  // record that is already gone says so rather than surfacing a raw error.
+  const { data: record, error: lookupError } = await supabase
+    .from("vaccinations")
+    .select("appointment_id, pet_id")
+    .eq("id", vaccinationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (lookupError) {
+    return failure("vaccinations", lookupError, "We could not remove that vaccination just now. Please try again.");
+  }
+  if (!record) return { status: "error", message: "That vaccination could not be found." };
+
+  const { error } = await supabase.rpc("delete_vaccination", { p_vaccination_id: vaccinationId });
+
+  if (error) return failure("vaccinations", error, "We could not remove that vaccination just now. Please try again.");
+
+  revalidateVaccinationPaths(record.appointment_id, record.pet_id);
   return { status: "success", message: "Vaccination removed." };
 }

@@ -2,6 +2,7 @@ import { Syringe } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { DeleteDueVaccinationDialog } from "@/components/vaccinations/delete-due-vaccination-dialog";
 import { VaccinationScheduleManager } from "@/components/vaccination-schedules/schedule-form";
 import { Pagination } from "@/components/search/pagination";
 import { EmptyState } from "@/components/states/empty-state";
@@ -9,6 +10,7 @@ import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAccess } from "@/features/auth/access";
+import { hasRole } from "@/features/auth/session";
 import { listSpecies } from "@/features/pets/queries";
 import { listAllSchedules } from "@/features/vaccination-schedules/queries";
 import { listPracticeVaccinationStatuses } from "@/features/vaccinations/queries";
@@ -19,7 +21,10 @@ export const metadata: Metadata = { title: "Vaccinations · TV Care" };
 const PAGE_SIZE = 25;
 
 export default async function AdminVaccinationsPage({ searchParams }: PageProps<"/admin/vaccinations">) {
-  await requireAccess("reception");
+  const user = await requireAccess("reception");
+  // Receptionists share this screen but hold no write on a clinical record —
+  // delete_vaccination is admin-only, so the control is not offered to them.
+  const canDelete = hasRole(user, "admin", "super_admin");
 
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;
@@ -65,10 +70,10 @@ export default async function AdminVaccinationsPage({ searchParams }: PageProps<
             <>
               <ul className="divide-border grid divide-y">
                 {dueToday.map((row) => (
-                  <li key={row.petId}>
+                  <li key={row.vaccinationId} className="flex items-center gap-1">
                     <Link
                       href={`/admin/patients/${row.petId}/vaccinations`}
-                      className="hover:bg-muted/50 focus-visible:ring-ring -mx-2 flex min-h-11 items-center gap-4 rounded-lg px-2 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                      className="hover:bg-muted/50 focus-visible:ring-ring -mx-2 flex min-h-11 flex-1 items-center gap-4 rounded-lg px-2 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
                       <div className="grid flex-1 gap-0.5">
                         <span className="text-sm font-medium">{row.petName}</span>
@@ -76,6 +81,13 @@ export default async function AdminVaccinationsPage({ searchParams }: PageProps<
                       </div>
                       <Badge variant={dueStatusBadgeVariant(row.due.status)}>{row.due.label}</Badge>
                     </Link>
+                    {canDelete ? (
+                      <DeleteDueVaccinationDialog
+                        vaccinationId={row.vaccinationId}
+                        petName={row.petName}
+                        vaccineName={row.vaccineName}
+                      />
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -213,6 +213,71 @@ describe("clinical authorship is doctor-only", () => {
   });
 });
 
+describe("an admin removing a vaccination record", () => {
+  it("soft-deletes it through delete_vaccination, which nobody but an admin may call", async () => {
+    const appointmentId = await insertAppointment();
+
+    const { data: vaccination } = await doctorA
+      .from("vaccinations")
+      .insert({
+        appointment_id: appointmentId,
+        pet_id: petA,
+        organization_id: orgA,
+        doctor_id: doctorRecordA,
+        vaccine_name: `Bordetella ${RUN}`,
+        date_administered: "2026-06-01",
+        next_due_date: "2027-06-01",
+      })
+      .select("id")
+      .single();
+
+    // The clinical fields stay the veterinarian's: an admin has no update on
+    // the row itself, only this one verb.
+    const { error: adminUpdateErr } = await adminA
+      .from("vaccinations")
+      .update({ vaccine_name: "Rewritten" })
+      .eq("id", vaccination!.id)
+      .select("id")
+      .maybeSingle();
+    expect(adminUpdateErr).toBeNull();
+    const { data: unchanged } = await adminA.from("vaccinations").select("vaccine_name").eq("id", vaccination!.id).single();
+    expect(unchanged!.vaccine_name).toBe(`Bordetella ${RUN}`);
+
+    const { error: clientErr } = await clientA.rpc("delete_vaccination", { p_vaccination_id: vaccination!.id });
+    expect(clientErr).not.toBeNull();
+
+    const { error: doctorErr } = await doctorA.rpc("delete_vaccination", { p_vaccination_id: vaccination!.id });
+    expect(doctorErr).not.toBeNull();
+
+    const { error: adminErr } = await adminA.rpc("delete_vaccination", { p_vaccination_id: vaccination!.id });
+    expect(adminErr).toBeNull();
+
+    // Gone from every read, and out of the due worklist the admin screen shows.
+    const { data: stillLive } = await adminA
+      .from("vaccinations")
+      .select("id")
+      .eq("id", vaccination!.id)
+      .is("deleted_at", null);
+    expect(stillLive).toEqual([]);
+
+    const { data: stillDue } = await adminA
+      .from("pet_vaccination_status")
+      .select("vaccination_id")
+      .eq("vaccination_id", vaccination!.id);
+    expect(stillDue).toEqual([]);
+
+    // Preserved and accounted for, not destroyed (CLAUDE.md §6).
+    const { data: audited } = await admin
+      .from("audit_logs")
+      .select("action, metadata")
+      .eq("entity_id", vaccination!.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    expect(audited?.[0]?.action).toBe("vaccinations.update");
+    expect(audited?.[0]?.metadata?.deleted_at?.to).toBeTruthy();
+  });
+});
+
 describe("client visibility", () => {
   it("sees a vaccination and deworming record for their own pet, but another client does not", async () => {
     const appointmentId = await insertAppointment();
