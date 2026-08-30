@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ClipboardList,
   CreditCard,
+  Database,
   FileText,
   FlaskConical,
   Globe,
@@ -46,9 +47,24 @@ export type NavItem = {
    * can actually read.
    */
   roles?: RoleSlug[];
+  /**
+   * The permission that reveals this item to a role the practice defined
+   * itself. `roles` still reveals it to the built-ins, so the two together
+   * read as "an administrator, or anyone their practice gave this to".
+   *
+   * Hiding an item is a courtesy either way: the page behind it guards itself,
+   * and row level security decides what any of them can actually read.
+   */
+  permission?: string;
 };
 
 const ADMINS: RoleSlug[] = ["admin", "super_admin"];
+
+/**
+ * Stands for "holds any permission at all" — the dashboard, which everyone
+ * with a desk in this area sees whatever their role is called.
+ */
+export const ANY_DESK = "*";
 
 /** Navigation per CLAUDE.md §8. Order is the order it appears. */
 
@@ -89,23 +105,27 @@ export const DOCTOR_NAV: NavItem[] = [
  * policies in 20260917000100_staff_roles.sql.
  */
 export const ADMIN_NAV: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: [...ADMINS, "finance_manager", "lab", "receptionist"] },
-  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays, roles: [...ADMINS, "receptionist"] },
-  { label: "Clients", href: "/admin/clients", icon: Users },
-  { label: "Patients", href: "/admin/patients", icon: PawPrint },
-  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, roles: [...ADMINS, "receptionist"] },
-  { label: "Services", href: "/admin/services", icon: ClipboardList, roles: [...ADMINS, "receptionist"] },
-  { label: "Lab", href: "/admin/lab", icon: FlaskConical, roles: [...ADMINS, "lab"] },
-  { label: "Billing", href: "/admin/billing", icon: CreditCard, roles: [...ADMINS, "finance_manager"] },
-  { label: "Payments", href: "/admin/payments", icon: Wallet, roles: [...ADMINS, "finance_manager"] },
-  { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe, roles: [...ADMINS, "receptionist"] },
-  { label: "Deworming", href: "/admin/deworming", icon: Worm, roles: [...ADMINS, "receptionist"] },
-  { label: "Reports", href: "/admin/reports", icon: FileText, roles: [...ADMINS, "finance_manager"] },
-  { label: "Notifications", href: "/admin/notifications", icon: Bell, roles: [...ADMINS, "receptionist"] },
-  { label: "Messages", href: "/admin/messages", icon: MessageSquare, roles: [...ADMINS, "receptionist"] },
-  { label: "Users", href: "/admin/users", icon: UserCog },
-  { label: "Website", href: "/admin/website", icon: Globe },
-  { label: "Settings", href: "/admin/settings", icon: Settings },
+  { label: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: [...ADMINS, "finance_manager", "lab", "receptionist"], permission: ANY_DESK },
+  { label: "Appointments", href: "/admin/appointments", icon: CalendarDays, roles: [...ADMINS, "receptionist"], permission: "appointments.view" },
+  { label: "Clients", href: "/admin/clients", icon: Users, permission: "clients.view" },
+  { label: "Patients", href: "/admin/patients", icon: PawPrint, permission: "patients.view" },
+  { label: "Doctors", href: "/admin/doctors", icon: Stethoscope, roles: [...ADMINS, "receptionist"], permission: "doctors.view" },
+  { label: "Services", href: "/admin/services", icon: ClipboardList, roles: [...ADMINS, "receptionist"], permission: "services.view" },
+  { label: "Lab", href: "/admin/lab", icon: FlaskConical, roles: [...ADMINS, "lab"], permission: "clinical.view" },
+  { label: "Billing", href: "/admin/billing", icon: CreditCard, roles: [...ADMINS, "finance_manager"], permission: "billing.view" },
+  { label: "Payments", href: "/admin/payments", icon: Wallet, roles: [...ADMINS, "finance_manager"], permission: "billing.view" },
+  { label: "Vaccinations", href: "/admin/vaccinations", icon: Syringe, roles: [...ADMINS, "receptionist"], permission: "preventive.view" },
+  { label: "Deworming", href: "/admin/deworming", icon: Worm, roles: [...ADMINS, "receptionist"], permission: "preventive.view" },
+  { label: "Reports", href: "/admin/reports", icon: FileText, roles: [...ADMINS, "finance_manager"], permission: "reports.view" },
+  { label: "Notifications", href: "/admin/notifications", icon: Bell, roles: [...ADMINS, "receptionist"], permission: "notifications.view" },
+  { label: "Messages", href: "/admin/messages", icon: MessageSquare, roles: [...ADMINS, "receptionist"], permission: "notifications.view" },
+  // No `permission`: granting roles and editing what a role may do is
+  // administrator work and deliberately cannot be delegated through the
+  // matrix — see ROLE_ADMINISTRATION_IS_ADMIN_ONLY in the catalogue.
+  { label: "Users & roles", href: "/admin/users", icon: UserCog },
+  { label: "Data", href: "/admin/data", icon: Database, permission: "data.view" },
+  { label: "Website", href: "/admin/website", icon: Globe, permission: "website.view" },
+  { label: "Settings", href: "/admin/settings", icon: Settings, permission: "settings.view" },
 ];
 
 export type Area = {
@@ -151,8 +171,15 @@ export const AREAS: Record<Area["key"], Area> = {
  * The items this person may see in an area. An item with no `roles` is
  * administrators-only; anything else lists the roles it belongs to.
  */
-export function navFor(area: Area["key"], roles: RoleSlug[]): NavItem[] {
-  return AREAS[area].nav.filter((item) => (item.roles ?? ADMINS).some((role) => roles.includes(role)));
+export function navFor(area: Area["key"], roles: RoleSlug[], permissions: string[] = []): NavItem[] {
+  return AREAS[area].nav.filter((item) => {
+    if ((item.roles ?? ADMINS).some((role) => roles.includes(role))) return true;
+    if (!item.permission) return false;
+
+    return item.permission === ANY_DESK
+      ? permissions.length > 0
+      : permissions.includes(item.permission);
+  });
 }
 
 /** Looks up a navigation item by exact path, for the coming-soon fallback. */

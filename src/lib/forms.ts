@@ -8,7 +8,10 @@ import type { ZodError } from "zod";
  */
 export type FormState =
   | { status: "idle" }
-  | { status: "success"; message?: string; id?: string }
+  // `warning` is for a save that landed but lost something along the way —
+  // a photo that would not upload. The record exists; the sentence still
+  // has to be read, so callers must not treat it as a plain success.
+  | { status: "success"; message?: string; id?: string; warning?: string }
   | { status: "error"; message: string; fieldErrors?: Record<string, string[]> };
 
 export const idleState: FormState = { status: "idle" };

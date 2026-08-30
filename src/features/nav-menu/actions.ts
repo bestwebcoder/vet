@@ -9,7 +9,7 @@ import { navMenuItemSchema, navMenuTreeSchema } from "@/lib/validation/nav-menu"
 
 /** Every public route the header/footer/mobile nav appear on — mirrors updateLogoImageAction's own list for the same reason. */
 function revalidatePublicRoutes() {
-  for (const path of ["/", "/about", "/services", "/contact", "/doctors"]) {
+  for (const path of ["/", "/about", "/services", "/training-education", "/contact", "/doctors"]) {
     revalidatePath(path);
   }
   revalidatePath("/[slug]", "page");

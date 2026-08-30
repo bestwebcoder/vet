@@ -166,7 +166,16 @@ describe("a client reaches only their own records", () => {
 
 describe("clinic staff are scoped to their organization", () => {
   it("lets a doctor read clients of their own organization", async () => {
-    const { data } = await doctorA.db.from("clients").select("id");
+    // Asked for these two by id rather than read whole. The seeded practice
+    // accumulates a client per test run, and once it passed PostgREST's
+    // 1000-row default this assertion started depending on which unordered
+    // page the two fixtures happened to land in. The question it is really
+    // asking — can this doctor see these clients — is the same either way.
+    const { data } = await doctorA.db
+      .from("clients")
+      .select("id")
+      .in("id", [clientRecordA, clientRecordB]);
+
     const ids = data?.map((r) => r.id) ?? [];
     expect(ids).toContain(clientRecordA);
     expect(ids).toContain(clientRecordB);
@@ -236,11 +245,58 @@ describe("writes are constrained", () => {
     expect(error).not.toBeNull();
   });
 
-  it("grants DELETE to nobody, so records can only be soft-deleted", async () => {
-    for (const actor of [clientA, doctorA, adminA]) {
-      const { error } = await actor.db.from("clients").delete().eq("id", clientRecordA);
-      expect(error?.code).toBe("42501");
+  /**
+   * This used to assert 42501, because DELETE was granted to nobody and the
+   * privilege itself was the guard. 20261003000100 granted it so the Archive
+   * screen could be emptied, and a table privilege in Postgres can only be
+   * given to a role — `authenticated`, which every signed-in person holds —
+   * so the guard is now the policy rather than the grant.
+   *
+   * What the practice needs is unchanged, so this asserts that instead: a
+   * client and a doctor destroy nothing. The delete matches no row and the
+   * record is still there afterwards, which is the fact that matters.
+   */
+  it("destroys nothing for a client or a doctor, so they can only soft-delete", async () => {
+    for (const actor of [clientA, doctorA]) {
+      const { error, data } = await actor.db.from("clients").delete().eq("id", clientRecordA).select("id");
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
     }
+
+    const { data: survived } = await admin.from("clients").select("id").eq("id", clientRecordA);
+    expect(survived).toHaveLength(1);
+  });
+
+  it("lets an administrator delete a client record of their own practice", async () => {
+    // Its own record: everything else in this file leans on the fixtures.
+    const { data: disposable, error: insertError } = await admin
+      .from("clients")
+      .insert({ organization_id: orgA, full_name: `Purge ${RUN}`, phone: `+88017${RUN}04` })
+      .select("id")
+      .single();
+    if (insertError) throw insertError;
+
+    const { error } = await adminA.db.from("clients").delete().eq("id", disposable!.id);
+    expect(error).toBeNull();
+
+    const { data } = await admin.from("clients").select("id").eq("id", disposable!.id);
+    expect(data).toEqual([]);
+  });
+
+  it("stops an administrator deleting a client record of another practice", async () => {
+    // Not 42501 — the privilege is granted, so it is the policy deciding, and
+    // a row the policy hides is a row the delete does not match.
+    const { error, data: deleted } = await adminA.db
+      .from("clients")
+      .delete()
+      .eq("id", clientRecordOrgB)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(deleted).toEqual([]);
+
+    const { data } = await admin.from("clients").select("id").eq("id", clientRecordOrgB);
+    expect(data).toHaveLength(1);
   });
 
   it("lets a client update their own permitted fields", async () => {

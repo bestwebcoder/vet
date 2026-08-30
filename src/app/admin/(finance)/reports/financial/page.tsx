@@ -4,14 +4,13 @@ import Link from "next/link";
 import { FinancialReportView } from "@/components/reports/financial-report-view";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { readDateRange } from "@/lib/validation/date-range";
 
 export const metadata: Metadata = { title: "Financial reports · TV Care" };
 
 export default async function AdminFinancialReportsPage({ searchParams }: PageProps<"/admin/reports/financial">) {
-  const user = await requireRole(...ACCESS.finance);
+  const user = await requireAccess("finance");
   const params = await searchParams;
   const range = readDateRange(params);
   const organizationId = user.organizationIds[0];

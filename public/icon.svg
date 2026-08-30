@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TV Care">
+  <!-- Fallback tab icon for an install that has not uploaded a logo yet.
+       Mirrors the header's "TV" tile (src/components/marketing/public-header.tsx).
+       Hex rather than oklch, and a plain baseline rather than
+       dominant-baseline: favicon rasterisers are not reliably
+       modern-CSS-aware, and centring by hand always renders. -->
+  <rect width="64" height="64" rx="14" fill="#4d7359"/>
+  <text x="32" y="41" fill="#fbfdfb" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+        font-size="26" font-weight="600" text-anchor="middle">TV</text>
+</svg>

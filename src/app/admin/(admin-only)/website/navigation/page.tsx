@@ -16,6 +16,7 @@ const FIXED_PAGE_LINKS = [
   { value: "/", label: "Home" },
   { value: "/about", label: "About Us" },
   { value: "/services", label: "Services" },
+  { value: "/training-education", label: "Training & Education" },
   { value: "/doctors", label: "Doctors" },
   { value: "/contact", label: "Contact Us" },
 ];

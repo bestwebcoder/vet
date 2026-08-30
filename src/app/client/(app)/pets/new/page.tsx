@@ -24,7 +24,13 @@ export default async function NewPetPage() {
         </p>
       </div>
 
-      <PetForm action={createPetAction} species={species} breeds={breeds} submitLabel="Add pet" />
+      <PetForm
+        action={createPetAction}
+        species={species}
+        breeds={breeds}
+        recordHrefBase="/client/pets"
+        submitLabel="Add pet"
+      />
     </div>
   );
 }

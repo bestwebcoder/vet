@@ -3,7 +3,8 @@ import Link from "next/link";
 import { NavDropdown } from "@/components/marketing/nav-dropdown";
 import { PublicMobileNav } from "@/components/marketing/public-mobile-nav";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { logoutAction } from "@/features/auth/actions";
 import { getSessionUser, homeHrefFor } from "@/features/auth/session";
 import { getPublicNavTree } from "@/features/nav-menu/queries";
 
@@ -11,7 +12,13 @@ import { getPublicNavTree } from "@/features/nav-menu/queries";
  * Signed-in visitors browsing the public site (someone checking how the
  * home page looks, following a link from outside the app) get a Dashboard
  * link here instead of Sign in / Get started — those would just bounce them
- * to /login while already authenticated.
+ * to /login while already authenticated — and a Sign out beside it, so
+ * leaving does not mean first finding a way back into the app.
+ *
+ * The signed-in / signed-out split is on the session, not on whether a
+ * dashboard was resolved: an account an administrator has created but not yet
+ * given a role has nowhere to go, and was being shown Sign in while already
+ * signed in. It now gets the one control that helps, Sign out.
  */
 export async function PublicHeader({
   practiceName,
@@ -34,9 +41,9 @@ export async function PublicHeader({
         <Link href="/" className="flex items-center gap-2.5">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded, arbitrary dimensions; no build-time optimization to gain here.
-            <img src={logoUrl} alt="" className="size-9 shrink-0 rounded-xl object-contain" />
+            <img src={logoUrl} alt="" className="size-12 shrink-0 rounded-xl object-contain" />
           ) : (
-            <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-semibold">
+            <span className="bg-primary text-primary-foreground flex size-12 shrink-0 items-center justify-center rounded-xl text-base font-semibold">
               TV
             </span>
           )}
@@ -65,11 +72,20 @@ export async function PublicHeader({
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <ThemeToggle size="icon-lg" />
-          {homeHref ? (
-            <Link href={homeHref} className={buttonVariants({ size: "touch" })}>
-              Go to dashboard
-            </Link>
+          <ThemeToggle />
+          {user ? (
+            <>
+              <form action={logoutAction}>
+                <Button type="submit" variant="ghost" size="touch">
+                  Sign out
+                </Button>
+              </form>
+              {homeHref ? (
+                <Link href={homeHref} className={buttonVariants({ size: "touch" })}>
+                  Go to dashboard
+                </Link>
+              ) : null}
+            </>
           ) : (
             <>
               <Link href="/login" className={buttonVariants({ variant: "ghost", size: "touch" })}>
@@ -83,8 +99,8 @@ export async function PublicHeader({
         </div>
 
         <div className="flex items-center gap-1 lg:hidden">
-          <ThemeToggle size="icon-lg" />
-          <PublicMobileNav homeHref={homeHref} navItems={navItems} />
+          <ThemeToggle />
+          <PublicMobileNav homeHref={homeHref} isSignedIn={user !== null} navItems={navItems} />
         </div>
       </div>
     </header>

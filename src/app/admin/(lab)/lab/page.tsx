@@ -8,8 +8,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listOpenDiagnosticsQueue } from "@/features/soap/queries";
 
 export const metadata: Metadata = { title: "Lab · TV Care" };
@@ -35,7 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
  * (20260917000100_staff_roles.sql) whatever this page offers.
  */
 export default async function AdminLabQueuePage({ searchParams }: PageProps<"/admin/lab">) {
-  await requireRole(...ACCESS.lab);
+  await requireAccess("lab");
 
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;

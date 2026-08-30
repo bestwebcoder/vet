@@ -217,11 +217,63 @@ describe("a client reaches only their own pets", () => {
     expect(error).toBeNull();
     expect(data).toEqual([]);
   });
+
+  // What the Delete control in the owner's portal does underneath.
+  it("can remove one of their own pets, by soft-deleting it", async () => {
+    const disposable = await insertPet({
+      client_id: clientRecordA,
+      organization_id: orgA,
+      name: `Removable ${RUN}`,
+      species_id: catSpecies,
+    });
+
+    const { data, error } = await clientA
+      .from("pets")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", disposable)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data?.map((row) => row.id)).toEqual([disposable]);
+
+    // Gone from the owner's portal, still on the record for the clinic.
+    const { data: stillThere } = await admin
+      .from("pets")
+      .select("id, deleted_at")
+      .eq("id", disposable)
+      .single();
+
+    expect(stillThere?.deleted_at).not.toBeNull();
+  });
+
+  it("cannot remove another client's pet", async () => {
+    const { data, error } = await clientA
+      .from("pets")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", petB)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+
+    const { data: untouched } = await admin
+      .from("pets")
+      .select("deleted_at")
+      .eq("id", petB)
+      .single();
+
+    expect(untouched?.deleted_at).toBeNull();
+  });
 });
 
 describe("clinic staff are scoped to their organisation", () => {
   it("lets a doctor see pets of their own organisation", async () => {
-    const { data } = await doctorA.from("pets").select("id");
+    // Asked for these two by id rather than read whole, for the same reason
+    // the clients equivalent in tests/rls.test.ts is: the seeded practice
+    // gains patients as tests run, and once it passed PostgREST's 1000-row
+    // default this depended on which unordered page the fixtures landed in.
+    // The question — can this doctor see these patients — is unchanged.
+    const { data } = await doctorA.from("pets").select("id").in("id", [petA, petB]);
     const ids = data?.map((row) => row.id) ?? [];
 
     expect(ids).toContain(petA);
@@ -263,11 +315,60 @@ describe("tenancy and ownership cannot be rewritten", () => {
     expect(error?.code).toBe("42501");
   });
 
-  it("grants DELETE to nobody, so patients are only ever soft-deleted", async () => {
-    for (const actor of [clientA, doctorA, adminA]) {
-      const { error } = await actor.from("pets").delete().eq("id", petA);
-      expect(error?.code).toBe("42501");
+  /**
+   * This used to assert 42501, because DELETE on pets was granted to nobody.
+   * 20261003000100 granted it so the Archive screen could be emptied, and a
+   * table privilege can only be given to a role — `authenticated`, which every
+   * signed-in person holds — so what stops an owner or a doctor now is the
+   * policy, not the missing grant.
+   *
+   * The requirement is the same one either way, so it is asserted directly: no
+   * patient record is destroyed, and it is still there afterwards.
+   */
+  it("destroys no patient for a client or a doctor", async () => {
+    for (const actor of [clientA, doctorA]) {
+      const { error, data } = await actor.from("pets").delete().eq("id", petA).select("id");
+      expect(error).toBeNull();
+      expect(data).toEqual([]);
     }
+
+    const { data: survived } = await admin.from("pets").select("id").eq("id", petA);
+    expect(survived).toHaveLength(1);
+  });
+
+  it("lets an administrator delete a patient of their own practice", async () => {
+    // Its own record, so the fixtures the rest of this file leans on survive.
+    const disposable = await insertPet({
+      client_id: clientRecordA,
+      organization_id: orgA,
+      name: `Purge ${RUN}`,
+      species_id: dogSpecies,
+      sex: "male",
+    });
+
+    const { error } = await adminA.from("pets").delete().eq("id", disposable);
+    expect(error).toBeNull();
+
+    const { data } = await admin.from("pets").select("id").eq("id", disposable);
+    expect(data).toEqual([]);
+  });
+
+  it("refuses an administrator a patient belonging to another practice", async () => {
+    const elsewhere = await insertPet({
+      client_id: clientRecordOrgB,
+      organization_id: orgB,
+      name: `Purge elsewhere ${RUN}`,
+      species_id: dogSpecies,
+    });
+
+    // Not 42501: the privilege is granted, so it is the policy that decides,
+    // and a row a policy hides is a row the delete simply does not match.
+    const { error, data: deleted } = await adminA.from("pets").delete().eq("id", elsewhere).select("id");
+    expect(error).toBeNull();
+    expect(deleted).toEqual([]);
+
+    const { data } = await admin.from("pets").select("id").eq("id", elsewhere);
+    expect(data).toHaveLength(1);
   });
 });
 

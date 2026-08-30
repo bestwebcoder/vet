@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { PetArchiveToggle } from "@/components/pets/pet-archive-toggle";
+import { PetRemoveDialog } from "@/components/pets/pet-remove-dialog";
 import { PetTabNav } from "@/components/pets/pet-tab-nav";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function PetRecordFrame({
   photoUrl,
   basePath,
   canManage = false,
+  canRemove = false,
   children,
 }: {
   pet: PetDetail;
@@ -26,6 +28,8 @@ export function PetRecordFrame({
   basePath: string;
   /** Clinic staff only — shows the archive/restore toggle. Never shown to the pet's owner. */
   canManage?: boolean;
+  /** The owner's own portal — shows the delete control. Never shown to clinic staff, who archive instead. */
+  canRemove?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -68,6 +72,8 @@ export function PetRecordFrame({
         </Link>
 
         {canManage ? <PetArchiveToggle petId={pet.id} isActive={pet.isActive} /> : null}
+
+        {canRemove ? <PetRemoveDialog petId={pet.id} petName={pet.name} /> : null}
       </div>
 
       <PetTabNav basePath={basePath} />

@@ -8,9 +8,10 @@ import type { FormState } from "@/lib/forms";
  */
 export function FormAlert({ state }: { state: FormState }) {
   if (state.status === "idle") return null;
-  if (state.status === "success" && !state.message) return null;
+  if (state.status === "success" && !state.message && !state.warning) return null;
 
   const isError = state.status === "error";
+  const warning = state.status === "success" ? state.warning : undefined;
 
   return (
     <Alert
@@ -18,7 +19,10 @@ export function FormAlert({ state }: { state: FormState }) {
       role={isError ? "alert" : "status"}
       className={isError ? undefined : "border-primary/30 bg-primary/5"}
     >
-      <AlertDescription>{state.message}</AlertDescription>
+      <AlertDescription>
+        {state.message}
+        {warning ? <span className="block text-muted-foreground">{warning}</span> : null}
+      </AlertDescription>
     </Alert>
   );
 }

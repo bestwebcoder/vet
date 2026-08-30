@@ -33,6 +33,22 @@ export type RoleSlug =
 export const SUPPORT_ROLES = ["finance_manager", "lab", "receptionist"] as const satisfies readonly RoleSlug[];
 
 /**
+ * The built-in slugs. A practice can now define its own roles, whose slugs are
+ * not in this union — they are filtered out of `roles` deliberately, so no
+ * `hasRole` check anywhere can be satisfied by a role somebody invented this
+ * morning. Custom roles work through permissions, and only through them.
+ */
+export const KNOWN_ROLES: RoleSlug[] = [
+  "client",
+  "doctor",
+  "admin",
+  "super_admin",
+  "finance_manager",
+  "lab",
+  "receptionist",
+];
+
+/**
  * Areas of the app, most privileged first. Order drives the landing redirect.
  *
  * The three support roles share /admin with admins, so they sit below admin
@@ -54,7 +70,19 @@ export type SessionUser = {
   email: string;
   phone: string | null;
   avatarUrl: string | null;
+  /**
+   * The built-in slugs this person holds. A custom role does not appear here —
+   * it has no slug any of this file knows about, which is the point: what a
+   * custom role can do is in `permissions`.
+   */
   roles: RoleSlug[];
+  /**
+   * Every permission key this person holds, through any role in any of their
+   * practices — the union, matching `roles`. Where it matters which practice a
+   * permission is held in, ask the database: only its policies are scoped per
+   * organization, and only they are the boundary.
+   */
+  permissions: string[];
   organizationIds: string[];
 };
 
@@ -77,7 +105,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     supabase.from("users").select("full_name, email, phone, avatar_url").eq("id", userId).single(),
     supabase
       .from("user_roles")
-      .select("organization_id, roles(slug)")
+      .select("organization_id, roles(slug, deleted_at, role_permissions(permission_key))")
       .eq("user_id", userId)
       .is("revoked_at", null),
   ]);
@@ -86,12 +114,19 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   // through. Treat it as signed out rather than rendering a half-built user.
   if (!profile) return null;
 
-  const roles = (grants ?? [])
-    .map((grant) => {
-      const role = Array.isArray(grant.roles) ? grant.roles[0] : grant.roles;
-      return role?.slug as RoleSlug | undefined;
-    })
-    .filter((slug): slug is RoleSlug => Boolean(slug));
+  // PostgREST returns an embedded one-to-one as an object or a single-element
+  // array depending on how it inferred the relationship; both shapes appear.
+  const grantedRoles = (grants ?? [])
+    .map((grant) => (Array.isArray(grant.roles) ? grant.roles[0] : grant.roles))
+    .filter((role): role is NonNullable<typeof role> => Boolean(role) && !role!.deleted_at);
+
+  const roles = grantedRoles
+    .map((role) => role.slug as RoleSlug | undefined)
+    .filter((slug): slug is RoleSlug => slug !== undefined && KNOWN_ROLES.includes(slug));
+
+  const permissions = grantedRoles.flatMap((role) =>
+    (role.role_permissions ?? []).map((entry) => entry.permission_key as string),
+  );
 
   return {
     id: userId,
@@ -100,6 +135,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     phone: profile.phone,
     avatarUrl: profile.avatar_url,
     roles: [...new Set(roles)],
+    permissions: [...new Set(permissions)],
     organizationIds: [...new Set((grants ?? []).map((grant) => grant.organization_id))],
   };
 });
@@ -117,6 +153,28 @@ export async function requireUser(): Promise<SessionUser> {
 
 export function hasRole(user: SessionUser, ...roles: RoleSlug[]): boolean {
   return roles.some((role) => user.roles.includes(role));
+}
+
+/** Whether this person holds any of these permissions, through any role. */
+export function hasPermission(user: SessionUser, ...keys: string[]): boolean {
+  return keys.some((key) => user.permissions.includes(key));
+}
+
+/**
+ * Requires one of these permissions to reach a page.
+ *
+ * The counterpart to requireRole, and the one to prefer: a page guarded this
+ * way admits a role the practice defined itself, which a slug check never can.
+ * Still only reachability — the policies decide what the page then shows.
+ */
+export async function requirePermission(...keys: string[]): Promise<SessionUser> {
+  const user = await requireUser();
+
+  if (!hasPermission(user, ...keys)) {
+    redirect("/no-access");
+  }
+
+  return user;
 }
 
 /**
@@ -145,4 +203,18 @@ export function homeHrefFor(user: SessionUser): string | null {
     : user.roles;
 
   return ROLE_AREAS.find((area) => effective.includes(area.role))?.href ?? null;
+}
+
+/**
+ * Where a public page's Book button leads.
+ *
+ * Somebody already signed in goes to their own area — a client to their
+ * dashboard, a doctor or an administrator to theirs — and anybody else goes to
+ * sign in, because booking needs an account and a login page that says so
+ * beats a booking screen that bounces them. The same rule the public header
+ * uses for Go to dashboard / Sign in, so the two cannot disagree on one page.
+ */
+export async function bookingHrefForVisitor(): Promise<string> {
+  const user = await getSessionUser();
+  return (user && homeHrefFor(user)) || "/login";
 }

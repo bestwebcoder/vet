@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { getSessionUser, requireRole } from "@/features/auth/session";
 import { failure, invalid, text, triState, type FormState } from "@/lib/forms";
@@ -172,12 +173,13 @@ export async function createPetAction(
 
   revalidatePath("/client");
   revalidatePath("/client/pets");
+  revalidatePath("/admin/patients");
+  revalidatePath("/doctor/patients");
 
   return {
     status: "success",
-    message: photoMessage
-      ? `${parsed.data.name} has been added, but the photo could not be saved. ${photoMessage}`
-      : `${parsed.data.name} has been added.`,
+    message: `${parsed.data.name} has been added.`,
+    warning: photoMessage ? `The photo could not be saved. ${photoMessage}` : undefined,
     id: data.id,
   };
 }
@@ -268,9 +270,84 @@ export async function updatePetAction(
 
   return {
     status: "success",
-    message: photoMessage ? `Changes saved, but the photo was not. ${photoMessage}` : "Changes saved.",
+    message: "Changes saved.",
+    warning: photoMessage ? `The photo was not saved. ${photoMessage}` : undefined,
     id: petId,
   };
+}
+
+/**
+ * A client removing one of their own pets.
+ *
+ * Soft, like every other removal here: the animal leaves the owner's portal,
+ * but the SOAP notes, prescriptions, vaccinations and invoices written about
+ * it stay where the clinic can still reach them (CLAUDE.md §6). There is no
+ * delete policy on `pets` at all, so a real delete is not reachable from a
+ * session — which is the point.
+ *
+ * Ownership is not checked here. Row level security returns no row for a pet
+ * this person does not own, and that is the boundary; `requireRole` only keeps
+ * the wrong audience out of the wrong action.
+ */
+export async function removeOwnPetAction(
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await requireRole("client");
+
+  const petId = text(formData, "petId");
+  if (!petId) return { status: "error", message: "We could not tell which pet to remove." };
+
+  const supabase = await createClient();
+
+  // A booked visit outlives the record it was booked against, and the clinic
+  // would keep a slot for an animal that is no longer listed. Ask for the
+  // appointment to be cancelled first rather than quietly stranding it.
+  const { data: upcoming } = await supabase
+    .from("appointments")
+    .select("starts_at")
+    .eq("pet_id", petId)
+    .is("deleted_at", null)
+    .in("status", ["requested", "confirmed", "checked_in", "in_consultation"])
+    .gte("starts_at", new Date().toISOString())
+    .order("starts_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (upcoming) {
+    return {
+      status: "error",
+      message:
+        "This pet has an upcoming appointment. Please cancel it first, then remove them.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("pets")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", petId)
+    .is("deleted_at", null)
+    .select("id, name")
+    .maybeSingle();
+
+  if (error) {
+    return failure("pets", error, "We could not remove this pet just now. Please try again.");
+  }
+
+  if (!data) {
+    return { status: "error", message: "This pet is no longer on your account." };
+  }
+
+  revalidatePath("/client");
+  revalidatePath("/client/pets");
+  revalidatePath("/admin/patients");
+  revalidatePath("/doctor/patients");
+
+  // The action redirects rather than returning a success the dialog acts on:
+  // revalidation re-renders the pet's own layout as part of this response, and
+  // that layout now correctly finds nothing — so anything short of leaving the
+  // route first puts the owner on a 404 for the pet they just removed.
+  redirect("/client/pets");
 }
 
 /**

@@ -47,10 +47,15 @@ export const ROSTER_ROLES = [
 export type RosterRole = (typeof ROSTER_ROLES)[number];
 export type TeamRole = RosterRole | "none";
 
-/** A tab on the roster: every role, plus everyone, plus the not-yet-granted. */
-export type RosterTab = TeamRole | "all";
+/**
+ * A tab on the roster: every built-in role, everyone, the not-yet-granted, and
+ * one for the holders of roles this practice defined itself. Those get a
+ * single tab rather than one each — a practice with a dozen custom roles would
+ * otherwise have a tab strip nobody can read on a phone.
+ */
+export type RosterTab = TeamRole | "custom" | "all";
 
-export const ROSTER_TABS: RosterTab[] = ["all", ...ROSTER_ROLES, "none"];
+export const ROSTER_TABS: RosterTab[] = ["all", ...ROSTER_ROLES, "custom", "none"];
 
 export function isRosterTab(value: string): value is RosterTab {
   return (ROSTER_TABS as string[]).includes(value);
@@ -63,7 +68,11 @@ export type TeamMember = {
   fullName: string;
   email: string;
   phone: string | null;
-  role: TeamRole;
+  /** The built-in slug, or "custom" for a role this practice defined. */
+  role: TeamRole | "custom";
+  /** The grant's actual role, which is what the select saves. */
+  roleId: string | null;
+  roleName: string;
   /** Whether a staff row backs this person — gates the "Delete" action, which removes that row. */
   hasStaffRecord: boolean;
 };
@@ -78,8 +87,9 @@ function one(value: Related): UserProfile | null {
 function toMember(
   userId: string,
   user: UserProfile | null,
-  role: TeamRole,
+  role: TeamMember["role"],
   hasStaffRecord: boolean,
+  grant: { roleId: string | null; roleName: string } = { roleId: null, roleName: "No role" },
 ): TeamMember {
   return {
     userId,
@@ -87,6 +97,8 @@ function toMember(
     email: user?.email ?? "",
     phone: user?.phone ?? null,
     role,
+    roleId: grant.roleId,
+    roleName: grant.roleName,
     hasStaffRecord,
   };
 }
@@ -96,12 +108,12 @@ function toMember(
  * embedded filter excludes the role, so `.eq("role.slug", …)` would just null
  * out `role` instead of narrowing the result to that role's holders.
  */
-const GRANT_COLUMNS = "user_id, created_at, role:role_id!inner (slug), user:user_id (full_name, email, phone)";
+const GRANT_COLUMNS =
+  "user_id, created_at, role:role_id!inner (id, slug, name, is_system), user:user_id (full_name, email, phone)";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- shaped by GRANT_COLUMNS */
-function slugOf(row: any): string | null {
-  const role = Array.isArray(row.role) ? row.role[0] : row.role;
-  return role?.slug ?? null;
+function roleOf(row: any): { id: string; slug: string; name: string; is_system: boolean } | null {
+  return (Array.isArray(row.role) ? row.role[0] : row.role) ?? null;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -119,7 +131,7 @@ async function staffUserIds(organizationId: string) {
 
 /**
  * Staff who hold no active role — the gap this page exists to surface, and
- * always a short list: someone sits here only between being invited and being
+ * always a short list: someone sits here only between being added and being
  * given a role. Small enough to read in full and slice in memory.
  */
 async function pendingStaff(organizationId: string): Promise<Result<TeamMember[]>> {
@@ -163,7 +175,7 @@ async function pendingStaff(organizationId: string): Promise<Result<TeamMember[]
  */
 async function roleHolderPage(
   organizationId: string,
-  role: RosterRole | null,
+  role: RosterRole | "custom" | null,
   start: number,
   limit: number,
   staffIds: Set<string>,
@@ -176,7 +188,10 @@ async function roleHolderPage(
     .eq("organization_id", organizationId)
     .is("revoked_at", null);
 
-  if (role) query = query.eq("role.slug", role);
+  // "custom" is not a slug — it is every role this practice defined for
+  // itself, which is exactly the roles that are not system ones.
+  if (role === "custom") query = query.eq("role.is_system", false);
+  else if (role) query = query.eq("role.slug", role);
 
   const { data, error, count } = await query
     .order("created_at", { ascending: false })
@@ -188,9 +203,24 @@ async function roleHolderPage(
   }
 
   const members = (data ?? []).flatMap((row) => {
-    const slug = slugOf(row);
-    if (!slug || !(ROSTER_ROLES as readonly string[]).includes(slug)) return [];
-    return [toMember(row.user_id, one(row.user as Related), slug as TeamRole, staffIds.has(row.user_id))];
+    const granted = roleOf(row);
+    if (!granted) return [];
+
+    // A role the practice defined itself has a slug no tab knows about. It is
+    // still a person holding a role, so it belongs on the roster under
+    // "custom" — dropping the row would hide them from the only screen that
+    // could change their role back.
+    const isBuiltIn = (ROSTER_ROLES as readonly string[]).includes(granted.slug);
+
+    return [
+      toMember(
+        row.user_id,
+        one(row.user as Related),
+        isBuiltIn ? (granted.slug as TeamRole) : "custom",
+        staffIds.has(row.user_id),
+        { roleId: granted.id, roleName: granted.name },
+      ),
+    ];
   });
 
   return { status: "ok", data: { members, totalCount: count ?? 0 } };
@@ -203,7 +233,7 @@ export async function getRosterCounts(organizationId: string): Promise<Result<Ro
   const [{ data: grantRows, error: grantError }, pending] = await Promise.all([
     supabase
       .from("user_roles")
-      .select("role:role_id (slug)")
+      .select("role:role_id (id, slug, name, is_system)")
       .eq("organization_id", organizationId)
       .is("revoked_at", null),
     pendingStaff(organizationId),
@@ -217,15 +247,15 @@ export async function getRosterCounts(organizationId: string): Promise<Result<Ro
   const counts = Object.fromEntries(ROSTER_TABS.map((tab) => [tab, 0])) as RosterCounts;
 
   for (const row of grantRows ?? []) {
-    const slug = slugOf(row);
-    if (slug && slug in counts) counts[slug as RosterTab] += 1;
+    const granted = roleOf(row);
+    if (!granted) continue;
+
+    if ((ROSTER_ROLES as readonly string[]).includes(granted.slug)) counts[granted.slug as RosterTab] += 1;
+    else counts.custom += 1;
   }
 
   counts.none = pending.data.length;
-  counts.all = (grantRows ?? []).filter((row) => {
-    const slug = slugOf(row);
-    return slug !== null && (ROSTER_ROLES as readonly string[]).includes(slug);
-  }).length + counts.none;
+  counts.all = (grantRows ?? []).filter((row) => roleOf(row) !== null).length + counts.none;
 
   return { status: "ok", data: counts };
 }

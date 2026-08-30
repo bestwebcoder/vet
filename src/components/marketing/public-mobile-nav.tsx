@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { logoutAction } from "@/features/auth/actions";
 import type { NavMenuTreeItem } from "@/features/nav-menu/queries";
 import { cn } from "@/lib/utils";
 
@@ -45,9 +46,15 @@ function MobileNavDropdown({ item, onNavigate }: { item: NavMenuTreeItem; onNavi
 
 export function PublicMobileNav({
   homeHref = null,
+  isSignedIn = false,
   navItems = [],
 }: {
   homeHref?: string | null;
+  /**
+   * Separate from homeHref: an account with no role yet has nowhere to go but
+   * is still signed in, and still needs a way out.
+   */
+  isSignedIn?: boolean;
   navItems?: NavMenuTreeItem[];
 }) {
   const [open, setOpen] = useState(false);
@@ -92,10 +99,22 @@ export function PublicMobileNav({
             ),
           )}
           <div className="mt-3 grid gap-2 border-t pt-3">
-            {homeHref ? (
-              <Link href={homeHref} onClick={close} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
-                Go to dashboard
-              </Link>
+            {isSignedIn ? (
+              <>
+                {homeHref ? (
+                  <Link href={homeHref} onClick={close} className={cn(buttonVariants({ size: "touch" }), "w-full")}>
+                    Go to dashboard
+                  </Link>
+                ) : null}
+                {/* No onClick to close the sheet: the action navigates to
+                    /login, which unmounts it anyway, and closing first would
+                    hide the pending state while the request is in flight. */}
+                <form action={logoutAction}>
+                  <Button type="submit" variant="outline" size="touch" className="w-full">
+                    Sign out
+                  </Button>
+                </form>
+              </>
             ) : (
               <>
                 <Link href="/login" onClick={close} className={cn(buttonVariants({ variant: "outline", size: "touch" }), "w-full")}>

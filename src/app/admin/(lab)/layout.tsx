@@ -1,5 +1,4 @@
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 
 /**
  * Diagnostic tests and their results.
@@ -13,7 +12,7 @@ import { requireRole } from "@/features/auth/session";
  * Route groups do not appear in the URL — these pages are still /admin/....
  */
 export default async function AccessLayout({ children }: { children: React.ReactNode }) {
-  await requireRole(...ACCESS.lab);
+  await requireAccess("lab");
 
   return children;
 }

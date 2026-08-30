@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 
-import { AvatarUploadCard } from "@/components/profile/avatar-upload-card";
-import { ChangePasswordCard } from "@/components/profile/change-password-card";
 import { ErrorState } from "@/components/states/error-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireRole } from "@/features/auth/session";
@@ -40,11 +38,7 @@ export default async function ClientProfilePage() {
           </CardContent>
         </Card>
       ) : (
-        <>
-          <AvatarUploadCard avatarUrl={user.avatarUrl} />
-          <ProfileForm client={record.data} branches={branches} />
-          <ChangePasswordCard />
-        </>
+        <ProfileForm client={record.data} avatarUrl={user.avatarUrl} branches={branches} />
       )}
     </div>
   );

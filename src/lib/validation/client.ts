@@ -40,3 +40,26 @@ export function clientToRow(values: ClientValues) {
     notes: values.notes,
   };
 }
+
+/**
+ * The subset of a client record a client may edit about themselves.
+ *
+ * Notes are the clinic's working record, not the client's — omitting them
+ * here is what stops a self-service save from blanking what reception wrote,
+ * since the profile form has no notes field to post back.
+ */
+export const ownClientProfileSchema = clientSchema.omit({ notes: true });
+
+export type OwnClientProfileValues = z.output<typeof ownClientProfileSchema>;
+
+export function ownClientProfileToRow(values: OwnClientProfileValues) {
+  return {
+    full_name: values.fullName,
+    phone: values.phone,
+    alternate_phone: values.alternatePhone,
+    email: values.email,
+    preferred_branch_id: values.preferredBranchId,
+    address: values.address,
+    city: values.city,
+  };
+}

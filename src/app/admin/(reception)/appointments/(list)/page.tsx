@@ -9,8 +9,7 @@ import { Pagination } from "@/components/search/pagination";
 import { ErrorState } from "@/components/states/error-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listAppointmentsPaginated, listAppointmentStatuses } from "@/features/appointments/queries";
 import { listDoctors } from "@/features/doctors/queries";
 
@@ -19,7 +18,7 @@ export const metadata: Metadata = { title: "Appointments · TV Care" };
 export default async function AdminAppointmentsPage({
   searchParams,
 }: PageProps<"/admin/appointments">) {
-  await requireRole(...ACCESS.reception);
+  await requireAccess("reception");
   const { doctorId: doctorIdParam, from, to, page: pageParam, upcomingPage: upcomingPageParam } = await searchParams;
   const doctorId = typeof doctorIdParam === "string" && doctorIdParam ? doctorIdParam : undefined;
   const from_ = typeof from === "string" ? from : undefined;

@@ -7,8 +7,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { ErrorState } from "@/components/states/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ACCESS } from "@/features/auth/access";
-import { requireRole } from "@/features/auth/session";
+import { requireAccess } from "@/features/auth/access";
 import { listPracticeDewormingStatuses } from "@/features/deworming/queries";
 import { dueStatusBadgeVariant, getDueInfo } from "@/lib/due-window";
 
@@ -17,7 +16,7 @@ export const metadata: Metadata = { title: "Deworming · TV Care" };
 const PAGE_SIZE = 25;
 
 export default async function AdminDewormingPage({ searchParams }: PageProps<"/admin/deworming">) {
-  await requireRole(...ACCESS.reception);
+  await requireAccess("reception");
 
   const { page: pageParam } = await searchParams;
   const page = typeof pageParam === "string" ? Number(pageParam) || 1 : 1;

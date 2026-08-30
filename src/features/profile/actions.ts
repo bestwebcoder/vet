@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { requireRole, requireUser } from "@/features/auth/session";
 import { describeAvatarProblem, readAvatar, uploadAvatar } from "@/features/profile/photo";
-import { failure, invalid, text, type FormState } from "@/lib/forms";
+import { failure, fieldErrorsFrom, invalid, text, type FormState } from "@/lib/forms";
 import { publicEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { ownClientProfileSchema, ownClientProfileToRow } from "@/lib/validation/client";
 import {
   adminChangeEmailSchema,
   adminSetPasswordSchema,
@@ -244,4 +245,153 @@ export async function adminChangeEmailAction(_previous: FormState, formData: For
   revalidatePath("/", "layout");
 
   return { status: "success", message: "Email updated." };
+}
+
+/**
+ * The client profile page saves as one form: contact details, an optional new
+ * photo and an optional password change behind a single Save button.
+ *
+ * Everything is validated — including verifying the current password — before
+ * anything is written, so a typo in one section cannot leave another half
+ * saved. The photo and the password come last and downgrade to a warning if
+ * they fail on their own: the contact details are already in the database at
+ * that point, and saying "saved, except the photo" is honest where a bare
+ * error would not be.
+ *
+ * The record is located by `user_id = auth.uid()`, not by an id posted from
+ * the browser: this surface is only ever a client editing themselves, so
+ * there is nothing to identify.
+ */
+export async function updateOwnClientProfileAction(
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireRole("client");
+
+  const parsed = ownClientProfileSchema.safeParse({
+    fullName: text(formData, "fullName") ?? "",
+    phone: text(formData, "phone") ?? "",
+    alternatePhone: text(formData, "alternatePhone") ?? null,
+    email: text(formData, "email") ?? null,
+    preferredBranchId: text(formData, "preferredBranchId") ?? null,
+    address: text(formData, "address") ?? "",
+    city: text(formData, "city") ?? "",
+  });
+
+  const photo = readAvatar(formData);
+  const photoProblem = photo ? describeAvatarProblem(photo) : null;
+
+  // The password section is optional now that it shares a Save button with
+  // the rest of the form: it is only attempted when something was typed into
+  // it, so saving a new phone number does not demand a password too.
+  const wantsPasswordChange = ["currentPassword", "newPassword", "confirmPassword"].some(
+    (field) => text(formData, field) !== undefined,
+  );
+  const passwordParsed = wantsPasswordChange
+    ? changePasswordSchema.safeParse({
+        currentPassword: formData.get("currentPassword"),
+        newPassword: formData.get("newPassword"),
+        confirmPassword: formData.get("confirmPassword"),
+      })
+    : null;
+
+  const fieldErrors: Record<string, string[]> = {};
+  if (!parsed.success) Object.assign(fieldErrors, fieldErrorsFrom(parsed.error));
+  if (passwordParsed && !passwordParsed.success) {
+    Object.assign(fieldErrors, fieldErrorsFrom(passwordParsed.error));
+  }
+  if (photoProblem) fieldErrors.avatar = [photoProblem];
+
+  if (Object.keys(fieldErrors).length > 0 || !parsed.success) {
+    return { status: "error", message: "Please correct the highlighted fields.", fieldErrors };
+  }
+
+  const supabase = await createClient();
+  const newPassword = passwordParsed?.success ? passwordParsed.data : null;
+
+  if (newPassword) {
+    // Supabase has no "check this password" call, so the current one is
+    // verified by signing in with it — before anything is written, so a wrong
+    // one costs nothing but the message.
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: newPassword.currentPassword,
+    });
+
+    if (verifyError) {
+      return {
+        status: "error",
+        message: "Your current password is incorrect.",
+        fieldErrors: { currentPassword: ["Incorrect"] },
+      };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("clients")
+    .update(ownClientProfileToRow(parsed.data))
+    .eq("user_id", user.id)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        status: "error",
+        message: "A client with this phone number already exists at this practice.",
+        fieldErrors: { phone: ["Already in use"] },
+      };
+    }
+    return failure("profile", error, "We could not save these changes just now. Please try again.");
+  }
+
+  if (!data) {
+    return { status: "error", message: "We could not find your client record to update." };
+  }
+
+  const warnings: string[] = [];
+
+  if (photo) {
+    const uploaded = await uploadAvatar(user.id, photo);
+
+    if (!uploaded.ok) {
+      warnings.push("Your photo could not be uploaded.");
+    } else {
+      const { error: avatarError } = await supabase
+        .from("users")
+        .update({ avatar_url: avatarPublicUrl(uploaded.path) })
+        .eq("id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (avatarError) {
+        console.error("[profile]", avatarError);
+        warnings.push("Your photo could not be saved.");
+      }
+    }
+  }
+
+  if (newPassword) {
+    const { error: passwordError } = await supabase.auth.updateUser({
+      password: newPassword.newPassword,
+    });
+
+    if (passwordError) {
+      console.error("[profile]", passwordError);
+      warnings.push("Your password could not be changed.");
+    }
+  }
+
+  // The name and photo appear in the sidebar on every authenticated screen,
+  // not only the page they were edited on.
+  revalidatePath("/", "layout");
+
+  const changedPassword = Boolean(newPassword) && warnings.length === 0;
+
+  return {
+    status: "success",
+    message: changedPassword ? "Changes saved. Your password has been changed." : "Changes saved.",
+    warning: warnings.length > 0 ? `${warnings.join(" ")} Everything else was saved.` : undefined,
+  };
 }

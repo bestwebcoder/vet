@@ -9,6 +9,8 @@ type TextAreaFieldProps = {
   hint?: string;
   errors?: string[];
   required?: boolean;
+  /** For a read-only view of a value that exists but is not this screen's to change. */
+  disabled?: boolean;
   /** For a step of a larger flow that needs the value outside this component. */
   onChange?: (value: string) => void;
   /** Override when two forms on one page share a field name. */
@@ -24,6 +26,7 @@ export function TextAreaField({
   hint,
   errors,
   required,
+  disabled,
   onChange,
   id,
 }: TextAreaFieldProps) {
@@ -43,13 +46,14 @@ export function TextAreaField({
         rows={rows}
         defaultValue={defaultValue}
         required={required}
+        disabled={disabled}
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         aria-invalid={hasError || undefined}
         aria-describedby={cn(hasError && errorId, hint && hintId) || undefined}
         className={cn(
           "border-input bg-background placeholder:text-muted-foreground rounded-lg border px-3 py-2 text-base",
           "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none",
-          "md:text-sm",
+          "md:text-sm disabled:opacity-60",
           hasError && "border-destructive",
         )}
       />

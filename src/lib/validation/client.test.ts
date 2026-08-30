@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { clientSchema, clientToRow } from "@/lib/validation/client";
+import {
+  clientSchema,
+  clientToRow,
+  ownClientProfileSchema,
+  ownClientProfileToRow,
+} from "@/lib/validation/client";
 
 const valid = {
   fullName: "Md. Rashed Karim",
@@ -51,5 +56,23 @@ describe("clientToRow", () => {
 
     expect(row).not.toHaveProperty("organization_id");
     expect(row).not.toHaveProperty("user_id");
+  });
+});
+
+describe("ownClientProfileSchema", () => {
+  const ownValues = ownClientProfileSchema.keyof().options.reduce(
+    (values, key) => ({ ...values, [key]: valid[key] }),
+    {} as Record<string, unknown>,
+  );
+
+  it("validates a client's own edits the same way reception's are validated", () => {
+    expect(ownClientProfileSchema.parse(ownValues).phone).toBe("+8801712345678");
+    expect(ownClientProfileSchema.safeParse({ ...ownValues, phone: "" }).success).toBe(false);
+  });
+
+  it("leaves notes out of the row, so a self-service save cannot blank them", () => {
+    expect(ownClientProfileToRow(ownClientProfileSchema.parse(ownValues))).not.toHaveProperty(
+      "notes",
+    );
   });
 });
