@@ -9,7 +9,21 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { TextAreaField } from "@/components/form/textarea-field";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { createScheduleAction, toggleScheduleActiveAction, updateScheduleAction } from "@/features/vaccination-schedules/actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  createScheduleAction,
+  deleteScheduleAction,
+  toggleScheduleActiveAction,
+  updateScheduleAction,
+} from "@/features/vaccination-schedules/actions";
 import type { VaccinationSchedule } from "@/features/vaccination-schedules/queries";
 import { idleState } from "@/lib/forms";
 import { VACCINATION_INTERVAL_UNITS, VACCINATION_INTERVAL_UNIT_LABELS } from "@/lib/validation/vaccination-schedule";
@@ -83,6 +97,51 @@ function ToggleActiveButton({ schedule }: { schedule: VaccinationSchedule }) {
   );
 }
 
+/**
+ * Removes a schedule from the list.
+ *
+ * Worth a confirmation rather than a click, and worth saying what it does not
+ * touch: an administrator reaching for this is usually looking at Deactivate,
+ * which is the reversible one and keeps the schedule on the screen.
+ */
+function DeleteScheduleDialog({ schedule }: { schedule: VaccinationSchedule }) {
+  const [open, setOpen] = useState(false);
+  const [state, formAction] = useActionState(deleteScheduleAction, idleState);
+
+  const [handledState, setHandledState] = useState(state);
+  if (state !== handledState) {
+    setHandledState(state);
+    if (state.status === "success") setOpen(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button type="button" variant="ghost" size="sm" />}>Delete</DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete {schedule.vaccineName}?</DialogTitle>
+          <DialogDescription>
+            Vaccinations already recorded against it keep their own vaccine name and dates, so no patient&rsquo;s
+            history changes — nothing new is scheduled from it. It waits in Data → Archive, where it can be put back.
+          </DialogDescription>
+        </DialogHeader>
+        <FormAlert state={state} />
+        <form action={formAction}>
+          <input type="hidden" name="scheduleId" value={schedule.id} />
+          <DialogFooter>
+            <Button type="button" variant="outline" size="touch" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <SubmitButton variant="destructive" pendingLabel="Deleting…" className="sm:w-auto">
+              Delete schedule
+            </SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ScheduleRow({ schedule, species }: { schedule: VaccinationSchedule; species: Species[] }) {
   const [editing, setEditing] = useState(false);
   const [state, formAction] = useActionState(updateScheduleAction, idleState);
@@ -102,11 +161,14 @@ function ScheduleRow({ schedule, species }: { schedule: VaccinationSchedule; spe
             </span>
             {schedule.description ? <span className="text-muted-foreground text-xs">{schedule.description}</span> : null}
           </div>
-          <div className="flex shrink-0 gap-2">
+          {/* Wraps rather than squeezing: three controls plus a vaccine name
+              do not fit one phone-width line. */}
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>
               Edit
             </Button>
             <ToggleActiveButton schedule={schedule} />
+            <DeleteScheduleDialog schedule={schedule} />
           </div>
         </div>
       </li>
